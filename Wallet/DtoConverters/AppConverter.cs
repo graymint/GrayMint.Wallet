@@ -10,6 +10,7 @@ public static class AppConverter
         ArgumentNullException.ThrowIfNull(model.SystemWalletId);
         return new App
         {
+            AppId = model.AppId,
             SystemWalletId = (int)model.SystemWalletId
         };
     }

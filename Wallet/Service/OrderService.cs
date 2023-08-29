@@ -43,29 +43,20 @@ public class OrderService
         walletIds.Add((int)order.App.SystemWalletId);
         _walletBalances = await _walletRepo.GetWalletBalances(order.AppId, order.CurrencyId, walletIds);
 
-        // todo tof
-        List<OrderItemModel> items;
-        if (order.TransactionType == TransactionType.Authorize)
-        {
-            items = new List<OrderItemModel>()
-            {
-                order.OrderItems.First()
-            };
-        }
-        else
-        {
-            items = order.OrderItems.ToList();
-        }
-
-        foreach (var participantWallet in items)
+        // pre calculate balances
+        await PreCalculateOrderItems(order);
+        foreach (var participantWallet in order.OrderItems.ToList())
         {
             // make receiver transaction
-            var receiverWalletId = order.TransactionType == TransactionType.Sale ? participantWallet.ReceiverWalletId : (int)order.App.SystemWalletId;
+            var receiverWalletId = order.TransactionType == TransactionType.Sale
+                ? participantWallet.ReceiverWalletId
+                : (int)order.App.SystemWalletId;
+
             await Transfer(participantWallet.SenderWalletId, receiverWalletId, participantWallet.ReceiverWalletId,
-                participantWallet.Amount, participantWallet.OrderItemId);
+                participantWallet.Amount, participantWallet.OrderItemId, transactionType: order.TransactionType);
         }
 
-        // todo tof : new wallet balance records 
+        // Add new wallet balance records 
         await _walletRepo.AddEntities(_walletBalances.Where(x => x.WalletBalanceId == 0).ToArray());
         order.ProcessTime = DateTime.UtcNow;
 
@@ -75,67 +66,154 @@ public class OrderService
         _newWalletTransactionId = -1;
     }
 
-    private async Task Transfer(int senderWalletId, int receiverWalletId, int actualReceiverWalletId, decimal amount, long orderItemId)
+
+    private void PreCalculateOrderItemReceiver(List<WalletBalanceModel> walletBalances, WalletBalanceModel? receiverWalletBalance,
+        int receiverWalletId, decimal amount)
+    {
+        if (receiverWalletBalance is null)
+        {
+            walletBalances.Add(new WalletBalanceModel
+            {
+                WalletId = receiverWalletId,
+                CurrencyId = walletBalances.First().CurrencyId,
+                Balance = amount,
+                MinBalance = 0,
+                ModifiedTime = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            walletBalances.Single(x => x.WalletBalanceId == receiverWalletBalance.WalletBalanceId)
+                .Balance = receiverWalletBalance.Balance + amount;
+        }
+    }
+
+    private List<WalletBalanceModel> PreCalculateOrderItemSender(List<WalletBalanceModel> walletBalances, WalletBalanceModel? senderWalletBalance,
+        int senderWalletId, decimal amount)
+    {
+        if (senderWalletBalance is null ||
+            (senderWalletBalance.Balance < amount && senderWalletBalance.Balance + (-senderWalletBalance.MinBalance) < amount))
+            throw new InsufficientBalanceException(
+                $"WalletId: {senderWalletId} does not have sufficient balance, amount is: {amount}");
+
+        if (senderWalletBalance.Balance >= amount)
+        {
+            // update temporary balance
+            walletBalances.Single(x => x.WalletBalanceId == senderWalletBalance.WalletBalanceId)
+                .Balance = senderWalletBalance.Balance - amount;
+        }
+        else
+        {
+            // update temporary balance
+            walletBalances.Single(x => x.WalletBalanceId == senderWalletBalance.WalletBalanceId)
+                .Balance = 0;
+
+            walletBalances.Single(x => x.WalletBalanceId == senderWalletBalance.WalletBalanceId)
+                .MinBalance = senderWalletBalance.MinBalance + amount;
+        }
+
+        return walletBalances;
+    }
+
+    private async Task PreCalculateOrderItems(OrderModel order)
+    {
+        ArgumentNullException.ThrowIfNull(order.OrderItems);
+        ArgumentNullException.ThrowIfNull(order.App);
+        ArgumentNullException.ThrowIfNull(order.App.SystemWalletId);
+
+        var walletIds = order.OrderItems.GetWalletIds();
+        //walletIds.Add((int)order.App.SystemWalletId);
+        var walletBalances = await _walletRepo.GetWalletBalancesWithoutTrack(order.AppId, order.CurrencyId, walletIds);
+
+        foreach (var item in order.OrderItems)
+        {
+            PreCalculateOrderItem(walletBalances, item);
+        }
+    }
+
+    private void PreCalculateOrderItem(List<WalletBalanceModel> walletBalances, OrderItemModel item)
+    {
+        var senderWalletBalance = walletBalances.SingleOrDefault(x => x.WalletId == item.SenderWalletId);
+        walletBalances = PreCalculateOrderItemSender(walletBalances, senderWalletBalance, item.SenderWalletId, item.Amount);
+
+        var receiverWalletBalance = walletBalances.SingleOrDefault(x => x.WalletId == item.ReceiverWalletId);
+        PreCalculateOrderItemReceiver(walletBalances, receiverWalletBalance, item.ReceiverWalletId, item.Amount);
+    }
+
+    private async Task Transfer(int senderWalletId, int receiverWalletId, int actualReceiverWalletId, decimal amount, long orderItemId,
+        TransactionType? transactionType = null)
     {
         // get new wallet transaction id
         _newWalletTransactionId = _newWalletTransactionId == -1 ? await BuildNewWalletTransactionId() : _newWalletTransactionId;
 
         // make sender transaction
         var senderWalletTransaction = CreateOrderTransaction(senderWalletId, actualReceiverWalletId, -amount,
-            _newWalletTransactionId, null, orderItemId);
+            _newWalletTransactionId, null, orderItemId, transactionType: transactionType);
         await _walletRepo.AddEntity(senderWalletTransaction);
 
         // make receiver transaction
         var receiverWalletTransaction = CreateOrderTransaction(receiverWalletId, actualReceiverWalletId, amount,
-            _newWalletTransactionId + 1, null, orderItemId);
+            _newWalletTransactionId + 1, null, orderItemId, transactionType: transactionType);
         await _walletRepo.AddEntity(receiverWalletTransaction);
 
         _newWalletTransactionId += 2;
     }
 
     private WalletTransactionModel CreateOrderTransaction(int walletId, int receiverWalletId, decimal amount,
-        long walletTransactionId, long? walletTransactionReferenceId, long orderItemId)
+        long walletTransactionId, long? walletTransactionReferenceId, long orderItemId, TransactionType? transactionType = null)
     {
         // get sender info
         var walletBalance = _walletBalances.SingleOrDefault(x => x.WalletId == walletId);
+
         decimal newBalance = 0;
 
-        if (amount < 0)
+        switch (amount)
         {
-            if (walletBalance is null ||
-                (walletBalance.Balance < -amount && walletBalance.Balance + (-walletBalance.MinBalance) < -amount))
-                throw new InsufficientBalanceException(
-                    $"WalletId: {walletId} does not have sufficient balance, amount is: {amount}");
+            case < 0:
+                {
+                    ArgumentNullException.ThrowIfNull(walletBalance);
+                    if (walletBalance.Balance >= -amount)
+                    {
+                        newBalance = walletBalance.Balance - (-amount);
 
-            if (walletBalance.Balance >= -amount)
-            {
-                newBalance = walletBalance.Balance - (-amount);
+                        // update cache
+                        _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
+                            .Balance = walletBalance.Balance + amount;
+                    }
 
-                // update cache
-                _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                    .Balance = walletBalance.Balance + amount;
-            }
+                    else if (walletBalance.Balance + (-walletBalance.MinBalance) < -amount)
+                    {
+                        newBalance = 0;
 
-            else
-            {
-                newBalance = 0;
+                        // update cache
+                        _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
+                            .Balance = 0;
 
-                // update cache
-                _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                    .Balance = 0;
+                        _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
+                            .MinBalance = walletBalance.MinBalance + (-amount);
 
-                _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                    .MinBalance = walletBalance.MinBalance + (-amount);
+                        _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
+                            .ModifiedTime = DateTime.UtcNow;
+                    }
+                    else if (transactionType == TransactionType.Authorize)
+                    {
+                        // update cache
+                        var currentBalance = walletBalance.Balance;
+                        var currentMinBalance = walletBalance.MinBalance;
+                        _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
+                            .Balance = (amount) + (currentBalance + (-currentMinBalance));
 
-                _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                    .ModifiedTime = DateTime.UtcNow;
-            }
-        }
-        else if (amount > 0)
-        {
+                        _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
+                            .MinBalance = 0;
+
+                        _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
+                            .ModifiedTime = DateTime.UtcNow;
+                    }
+
+                    throw new ArgumentOutOfRangeException(nameof(amount), amount, "Balance can not calculate.");
+                }
             // update cache
-            if (walletBalance is null)
-            {
+            case > 0 when walletBalance is null:
                 newBalance = amount;
 
                 _walletBalances.Add(new WalletBalanceModel
@@ -146,15 +224,14 @@ public class OrderService
                     MinBalance = 0,
                     ModifiedTime = DateTime.UtcNow
                 });
-            }
-            else
-            {
+                break;
+            case > 0:
                 newBalance = _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
                     .Balance + amount;
 
                 _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
                     .Balance = walletBalance.Balance + amount;
-            }
+                break;
         }
 
         // make sender transaction
@@ -258,7 +335,7 @@ public class OrderService
         var duplicateItems = request.ParticipantWallets
             .GroupBy(x => new { x.ReceiverWalletId, x.SenderWalletId, x.Amount })
             .Where(x => x.Count() > 1)
-            .Select(x => 1)
+            .Select(_ => 1)
             .ToList();
         if (duplicateItems.Count > 0)
             throw new InvalidOperationException("duplicate records.");
@@ -344,10 +421,6 @@ public class OrderService
 
         // clean cache wallet balances
         _walletBalances = new List<WalletBalanceModel>();
-
-        return await GetOrder(appId, orderId);
-
-
         throw new NotImplementedException();
     }
 

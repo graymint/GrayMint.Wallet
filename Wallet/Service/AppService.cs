@@ -16,7 +16,7 @@ public class AppService
         _walletService = walletService;
     }
 
-    public async Task<int> Create()
+    public async Task<App> Create()
     {
         // Create App
         var app = new AppModel
@@ -39,7 +39,7 @@ public class AppService
 
         await _walletRepo.CommitTransaction();
 
-        return app.AppId;
+        return app.ToDto();
     }
 
     public async Task<App> Get(int appId)

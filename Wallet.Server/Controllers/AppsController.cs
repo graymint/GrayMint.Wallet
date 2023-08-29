@@ -18,7 +18,7 @@ public class AppsController : ControllerBase
 
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
-    public async Task<ActionResult<int>> Create()
+    public async Task<ActionResult<App>> Create()
     {
         return StatusCode(StatusCodes.Status201Created, await _appService.Create());
     }

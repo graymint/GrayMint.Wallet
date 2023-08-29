@@ -89,6 +89,15 @@ public class WalletRepo
             .ToListAsync();
     }
 
+    public async Task<List<WalletBalanceModel>> GetWalletBalancesWithoutTrack(int appId, int currencyId, List<int> walletIds)
+    {
+        return await _walletDbContext.WalletBalances
+            .Include(w => w.Wallet)
+            .Where(w => w.Wallet!.AppId == appId && w.CurrencyId == currencyId && walletIds.ToArray().Any(walletId => w.WalletId == walletId))
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
     public async Task<WalletBalanceModel?> FindWalletCurrency(int walletId, int currencyId)
     {
         return await _walletDbContext.WalletBalances

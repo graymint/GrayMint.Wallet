@@ -1,11 +1,8 @@
-﻿using System.Formats.Asn1;
-using EWallet.Models;
-using EWallet.Persistence;
+﻿using EWallet.Persistence;
 using EWallet.Server;
 using EWallet.Api;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EWallet.Test.Helper;
@@ -20,6 +17,8 @@ public class TestInit
     public WalletsClient WalletsClient => new(HttpClient);
     public OrdersClient OrdersClient => new(HttpClient);
     public int AppId { get; set; }
+    public int SystemWalletId { get; set; }
+
     private TestInit(Dictionary<string, string?> appSettings, string environment)
     {
         // Application
@@ -52,6 +51,8 @@ public class TestInit
     private async Task Init()
     {
         // Create new app
-        AppId = await AppsClient.CreateAsync();
+        var app = await AppsClient.CreateAsync();
+        AppId = app.AppId;
+        SystemWalletId = app.SystemWalletId;
     }
 }
