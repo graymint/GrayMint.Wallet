@@ -34,10 +34,6 @@ public class OrderService
 
     private async Task ProcessOrder(OrderModel order)
     {
-
-
-
-
         // add system wallet id to list walletIds
         ArgumentNullException.ThrowIfNull(order.OrderItems);
         ArgumentNullException.ThrowIfNull(order.App);
@@ -69,7 +65,6 @@ public class OrderService
         // reset cache, next caller must be get from db again
         _newWalletTransactionId = -1;
     }
-
 
     private void PreCalculateOrderItemReceiver(List<WalletBalanceModel> walletBalances, WalletBalanceModel? receiverWalletBalance,
         int receiverWalletId, decimal amount)
@@ -126,9 +121,7 @@ public class OrderService
         ArgumentNullException.ThrowIfNull(order.App.SystemWalletId);
 
         var walletIds = order.OrderItems.GetWalletIds();
-        //walletIds.Add((int)order.App.SystemWalletId);
         var walletBalances = await _walletRepo.GetWalletBalancesWithoutTrack(order.AppId, order.CurrencyId, walletIds);
-
         foreach (var item in order.OrderItems)
         {
             PreCalculateOrderItem(walletBalances, item);
@@ -175,17 +168,17 @@ public class OrderService
         {
             case < 0:
                 {
-                    ArgumentNullException.ThrowIfNull(walletBalance);
-                    if (walletBalance.Balance >= -amount)
+                    if (walletBalance is not null && walletBalance.Balance >= -amount)
                     {
                         newBalance = walletBalance.Balance - (-amount);
 
                         // update cache
                         _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
                             .Balance = walletBalance.Balance + amount;
+                        break;
                     }
 
-                    else if (walletBalance.Balance + (-walletBalance.MinBalance) < -amount)
+                    if (walletBalance is not null && walletBalance.Balance + (-walletBalance.MinBalance) >= -amount)
                     {
                         newBalance = 0;
 
@@ -198,12 +191,29 @@ public class OrderService
 
                         _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
                             .ModifiedTime = DateTime.UtcNow;
+                        break;
                     }
-                    else if (transactionType == TransactionType.Authorize)
+
+                    if (transactionType == TransactionType.Authorize)
                     {
+                        if (walletBalance is null)
+                        {
+                            newBalance = amount;
+                            _walletBalances.Add(new WalletBalanceModel
+                            {
+                                WalletId = walletId,
+                                CurrencyId = _walletBalances.First().CurrencyId,
+                                MinBalance = 0,
+                                Balance = amount,
+                                ModifiedTime = DateTime.UtcNow
+                            });
+                            break;
+                        }
+
                         // update cache
                         var currentBalance = walletBalance.Balance;
                         var currentMinBalance = walletBalance.MinBalance;
+
                         _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
                             .Balance = (amount) + (currentBalance + (-currentMinBalance));
 
@@ -212,6 +222,7 @@ public class OrderService
 
                         _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
                             .ModifiedTime = DateTime.UtcNow;
+                        break;
                     }
 
                     throw new ArgumentOutOfRangeException(nameof(amount), amount, "Balance can not calculate.");
@@ -347,6 +358,7 @@ public class OrderService
 
     public async Task<Order> Capture(int appId, Guid orderId)
     {
+        // todo: lock application
         // get order info
         var order = await GetOrderFull(appId, orderId);
         ArgumentNullException.ThrowIfNull(order.App);
@@ -357,7 +369,6 @@ public class OrderService
         if (orderStatus != OrderStatus.Pending)
             throw new InvalidTransactionTypeException("Capture process works only on authorize status.");
 
-        // lock application
         // fill wallet balances cache
         var walletIds = order.OrderItems.GetWalletIds();
         walletIds.Add((int)order.App.SystemWalletId);
@@ -366,9 +377,7 @@ public class OrderService
         foreach (var item in order.OrderItems)
         {
             // find out which wallet is receiver
-            var senderWalletId = item.OrderTransactions is not null
-                ? (int)order.App.SystemWalletId
-                : item.SenderWalletId;
+            var senderWalletId = (int)order.App.SystemWalletId;
             await Transfer(senderWalletId, item.ReceiverWalletId, item.ReceiverWalletId, item.Amount, item.OrderItemId);
         }
 

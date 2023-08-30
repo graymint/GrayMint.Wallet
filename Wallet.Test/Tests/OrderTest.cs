@@ -956,7 +956,7 @@ public class OrderTest : BaseControllerTest
         var wallet3AvailableBalance = wallet3.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
         var wallet4AvailableBalance = wallet4.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
         var wallet5AvailableBalance = wallet5.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
-        var wallet6AvailableBalance = wallet6.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
+        var wallet6AvailableBalance = wallet6.Currencies.SingleOrDefault(c => c.CurrencyId == systemWalletDom.CurrencyId)?.Balance;
 
         // Assert
         Assert.AreEqual(0, wallet1AvailableBalance);
@@ -964,7 +964,7 @@ public class OrderTest : BaseControllerTest
         Assert.AreEqual(-150, wallet3AvailableBalance);
         Assert.AreEqual(-10, wallet4AvailableBalance);
         Assert.AreEqual(-20, wallet5AvailableBalance);
-        Assert.AreEqual(0, wallet6AvailableBalance);
+        Assert.IsNull(wallet6AvailableBalance);
     }
 
     [TestMethod]
@@ -1248,7 +1248,7 @@ public class OrderTest : BaseControllerTest
                     new ()
                     {
                         SenderWalletId = walletDom1.Wallet.WalletId,
-                        ReceiverWalletId = walletDom5.Wallet.WalletId,
+                        ReceiverWalletId = walletDom2.Wallet.WalletId,
                         Amount = 100
                     },
                     new ()
