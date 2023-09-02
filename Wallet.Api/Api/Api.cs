@@ -1576,8 +1576,8 @@ namespace EWallet.Api
     public enum OrderStatus
     {
 
-        [System.Runtime.Serialization.EnumMember(Value = @"Pending")]
-        Pending = 0,
+        [System.Runtime.Serialization.EnumMember(Value = @"Authorized")]
+        Authorized = 0,
 
         [System.Runtime.Serialization.EnumMember(Value = @"Captured")]
         Captured = 1,

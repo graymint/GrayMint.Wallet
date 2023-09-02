@@ -108,7 +108,7 @@ public class OrderService
                 .Balance = 0;
 
             walletBalances.Single(x => x.WalletBalanceId == senderWalletBalance.WalletBalanceId)
-                .MinBalance = senderWalletBalance.MinBalance + amount;
+                .MinBalance = senderWalletBalance.MinBalance - (amount + senderWalletBalance.Balance);
         }
 
         return walletBalances;
@@ -182,12 +182,12 @@ public class OrderService
                     {
                         newBalance = 0;
 
+                        _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
+                            .MinBalance = walletBalance.MinBalance - (walletBalance.Balance + amount);
+
                         // update cache
                         _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
                             .Balance = 0;
-
-                        _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                            .MinBalance = walletBalance.MinBalance + (-amount);
 
                         _walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
                             .ModifiedTime = DateTime.UtcNow;
@@ -366,7 +366,7 @@ public class OrderService
         ArgumentNullException.ThrowIfNull(order.OrderItems);
         var orderStatus = order.ToDto().Status;
 
-        if (orderStatus != OrderStatus.Pending)
+        if (orderStatus != OrderStatus.Authorized)
             throw new InvalidTransactionTypeException("Capture process works only on authorize status.");
 
         // fill wallet balances cache
@@ -381,7 +381,7 @@ public class OrderService
             await Transfer(senderWalletId, item.ReceiverWalletId, item.ReceiverWalletId, item.Amount, item.OrderItemId);
         }
 
-        // todo tof : new wallet balance records 
+        // todo new wallet balance records 
         await _walletRepo.AddEntities(_walletBalances.Where(x => x.WalletBalanceId == 0).ToArray());
 
         // update order
@@ -398,6 +398,10 @@ public class OrderService
 
     public async Task<Order> Void(int appId, Guid orderId)
     {
+        // todo lock application
+
+        await _walletRepo.BeginTransaction();
+
         // get order info
         var order = await GetOrderFull(appId, orderId);
         ArgumentNullException.ThrowIfNull(order.App);
@@ -408,7 +412,6 @@ public class OrderService
         if (order.VoidedTime is not null)
             throw new InvalidTransactionTypeException("Order is already Voided.");
 
-        // lock application
         // fill wallet balances cache
         var walletIds = order.OrderItems.GetWalletIds();
         walletIds.Add((int)order.App.SystemWalletId);
@@ -417,13 +420,13 @@ public class OrderService
         foreach (var item in order.OrderItems.Where(x => x.OrderTransactions is not null))
         {
             // find out which wallet is receiver
-            var senderWalletId = orderStatus == OrderStatus.Pending
+            var senderWalletId = orderStatus == OrderStatus.Authorized
                 ? (int)order.App.SystemWalletId
                 : item.ReceiverWalletId;
             await Transfer(senderWalletId, item.SenderWalletId, item.SenderWalletId, item.Amount, item.OrderItemId);
         }
 
-        // todo tof : new wallet balance records 
+        // add new wallet balance records 
         await _walletRepo.AddEntities(_walletBalances.Where(x => x.WalletBalanceId == 0).ToArray());
 
         // update order
@@ -431,10 +434,10 @@ public class OrderService
         order.VoidedTime = DateTime.UtcNow;
 
         await _walletRepo.SaveChangesAsync();
+        await _walletRepo.CommitTransaction();
 
         // clean cache wallet balances
-        _walletBalances = new List<WalletBalanceModel>();
-        throw new NotImplementedException();
+        return await GetOrder(order.AppId, order.OrderReferenceNumber);
     }
 
     public async Task<Order> GetOrder(int appId, Guid orderId)

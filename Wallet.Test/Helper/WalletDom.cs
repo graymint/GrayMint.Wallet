@@ -16,7 +16,7 @@ public class WalletDom
         CurrencyId = currencyId;
     }
 
-    public static async Task<WalletDom> Create(TestInit testInit, decimal? minBalance = long.MaxValue, int? currencyId = null)
+    public static async Task<WalletDom> Create(TestInit testInit, decimal? minBalance = -long.MaxValue, int? currencyId = null)
     {
         var wallet = await testInit.WalletsClient.CreateWalletAsync(testInit.AppId);
         var calculatedCurrencyId = currencyId ?? await testInit.CurrenciesClient.CreateAsync(testInit.AppId);
@@ -26,7 +26,7 @@ public class WalletDom
             await testInit.WalletsClient.SetMinBalanceAsync(testInit.AppId, wallet.WalletId, new SetMinBalanceRequest
             {
                 CurrencyId = calculatedCurrencyId,
-                MinBalance = (decimal)-minBalance
+                MinBalance = (decimal)minBalance
             });
 
         // get wallet to prepare included objects
@@ -98,7 +98,9 @@ public class WalletDom
         {
             Assert.AreEqual(0, senderWalletAfter.Currencies.Single(x => x.CurrencyId == currencyId).Balance);
             Assert.AreEqual(senderWalletAfter.Currencies.Single(x => x.CurrencyId == currencyId).MinBalance,
-                senderWalletBefore.Currencies.Single(x => x.CurrencyId == currencyId).MinBalance + amount);
+                senderWalletBefore.Currencies.Single(x => x.CurrencyId == currencyId).MinBalance -
+                senderWalletBefore.Currencies.Single(x => x.CurrencyId == currencyId).Balance +
+                amount);
         }
 
         // validate sender wallet min balance
@@ -110,7 +112,7 @@ public class WalletDom
                 // validate general properties
                 Assert.IsNull(order.CapturedTime);
                 Assert.IsNull(order.VoidedTime);
-                Assert.AreEqual(OrderStatus.Pending, order.Status);
+                Assert.AreEqual(OrderStatus.Authorized, order.Status);
 
                 // validate receiver balance and minBalance
                 Assert.AreEqual(receiverWalletAfter.Currencies.SingleOrDefault(x => x.CurrencyId == currencyId)?.MinBalance ?? 0,
@@ -230,7 +232,7 @@ public class WalletDom
         Assert.AreEqual(senderWalletAfter.Currencies.Single(x => x.CurrencyId == order.CurrencyId).Balance,
             senderWalletBefore.Currencies.Single(x => x.CurrencyId == order.CurrencyId).Balance + amount);
 
-        if (order.Status == OrderStatus.Pending)
+        if (order.Status == OrderStatus.Authorized)
         {
             // validate system balances
             Assert.AreEqual(systemWalletAfter.Currencies.Single(x => x.CurrencyId == order.CurrencyId).Balance,

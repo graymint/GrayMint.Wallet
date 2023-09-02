@@ -480,7 +480,7 @@ public class OrderTest : BaseControllerTest
         var walletDom = await WalletDom.Create(TestInit1);
 
         // create wallet2
-        var walletDom2 = await WalletDom.Create(TestInit1, 51, walletDom.CurrencyId);
+        var walletDom2 = await WalletDom.Create(TestInit1, -51, walletDom.CurrencyId);
 
         // create wallet3
         var walletDom3 = await WalletDom.Create(TestInit1, null, walletDom.CurrencyId);
@@ -554,7 +554,7 @@ public class OrderTest : BaseControllerTest
         var walletDom = await WalletDom.Create(TestInit1);
 
         // create wallet2
-        var walletDom2 = await WalletDom.Create(TestInit1, 51, walletDom.CurrencyId);
+        var walletDom2 = await WalletDom.Create(TestInit1, -51, walletDom.CurrencyId);
 
         // create wallet3
         var walletDom3 = await WalletDom.Create(TestInit1, null, walletDom.CurrencyId);
@@ -587,7 +587,7 @@ public class OrderTest : BaseControllerTest
     }
 
     [TestMethod]
-    public async Task Success_Void_authorized()
+    public async Task Void_authorized()
     {
         // create wallet1
         var walletDom = await WalletDom.Create(TestInit1);
@@ -601,7 +601,7 @@ public class OrderTest : BaseControllerTest
     }
 
     [TestMethod]
-    public async Task Success_Void_captured()
+    public async Task Void_captured()
     {
         // create wallet1
         var walletDom = await WalletDom.Create(TestInit1);
@@ -617,7 +617,29 @@ public class OrderTest : BaseControllerTest
     }
 
     [TestMethod]
-    public async Task Success_Void_sale()
+    public async Task Void_sale()
+    {
+        // create wallet1
+        var walletDom = await WalletDom.Create(TestInit1);
+
+        // create a authorize order
+        var orderId = Guid.NewGuid();
+        await walletDom.CreateOrder(TestInit1, orderId: orderId, transactionType: TransactionType.Sale, amount: 100);
+        var receiverWallet = walletDom.ReceiverWallet;
+        ArgumentNullException.ThrowIfNull(receiverWallet);
+
+        var walletDom2 = await WalletDom.Create(TestInit1);
+        await walletDom2.CreateOrder(TestInit1, senderWalletId: receiverWallet.WalletId, receiverWalletId: walletDom2.Wallet.WalletId,
+            amount: 100, currencyId: walletDom.CurrencyId);
+
+        // void the order
+        await walletDom.Void(TestInit1, orderId);
+        throw new NotImplementedException();
+    }
+
+
+    [TestMethod]
+    public async Task Void_sale_without_balance()
     {
         // create wallet1
         var walletDom = await WalletDom.Create(TestInit1);
@@ -625,6 +647,8 @@ public class OrderTest : BaseControllerTest
         // create a authorize order
         var orderId = Guid.NewGuid();
         await walletDom.CreateOrder(TestInit1, orderId: orderId, transactionType: TransactionType.Sale);
+
+
 
         // void the order
         await walletDom.Void(TestInit1, orderId);
@@ -696,7 +720,7 @@ public class OrderTest : BaseControllerTest
                 new()
                 {
                     SenderWalletId = walletDom1.Wallet.WalletId,
-                    ReceiverWalletId = walletDom5.Wallet.WalletId,
+                    ReceiverWalletId = walletDom2.Wallet.WalletId,
                     Amount = 100
                 },
                 new()
@@ -758,7 +782,7 @@ public class OrderTest : BaseControllerTest
         var wallet3AvailableBalance = wallet3.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
         var wallet4AvailableBalance = wallet4.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
         var wallet5AvailableBalance = wallet5.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
-        var wallet6AvailableBalance = wallet6.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
+        var wallet6AvailableBalance = wallet6.Currencies.SingleOrDefault(c => c.CurrencyId == systemWalletDom.CurrencyId)?.Balance;
 
         // Assert
         Assert.AreEqual(100, wallet1AvailableBalance);
@@ -766,7 +790,7 @@ public class OrderTest : BaseControllerTest
         Assert.AreEqual(0, wallet3AvailableBalance);
         Assert.AreEqual(20, wallet4AvailableBalance);
         Assert.AreEqual(40, wallet5AvailableBalance);
-        Assert.AreEqual(0, wallet6AvailableBalance);
+        Assert.IsNull(wallet6AvailableBalance);
     }
 
     [TestMethod]
@@ -975,7 +999,10 @@ public class OrderTest : BaseControllerTest
         var walletDom1 = await WalletDom.Create(TestInit1);
         var walletDom2 = await WalletDom.Create(TestInit1);
         var walletDom3 = await WalletDom.Create(TestInit1);
-        var walletDom4 = await WalletDom.Create(TestInit1);
+
+        // set min balance for wallet4
+        var walletDom4 = await WalletDom.Create(TestInit1, minBalance: -30, currencyId: systemWalletDom.CurrencyId);
+
         var walletDom5 = await WalletDom.Create(TestInit1);
         var walletDom6 = await WalletDom.Create(TestInit1);
 
@@ -1054,17 +1081,18 @@ public class OrderTest : BaseControllerTest
         var wallet2AvailableBalance = wallet2.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
         var wallet3AvailableBalance = wallet3.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
         var wallet4AvailableBalance = wallet4.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
+        var wallet4AvailableMinBalance = wallet4.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).MinBalance;
         var wallet5AvailableBalance = wallet5.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
-        var wallet6AvailableBalance = wallet6.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance;
+        var wallet6AvailableBalance = wallet6.Currencies.SingleOrDefault(c => c.CurrencyId == systemWalletDom.CurrencyId)?.Balance;
 
         // Assert
         Assert.AreEqual(0, wallet1AvailableBalance);
         Assert.AreEqual(0, wallet2AvailableBalance);
-        Assert.AreEqual(0, wallet3AvailableBalance);
+        Assert.AreEqual(-150, wallet3AvailableBalance);
         Assert.AreEqual(0, wallet4AvailableBalance);
-        Assert.AreEqual(0, wallet5AvailableBalance);
-        Assert.AreEqual(0, wallet6AvailableBalance);
-        throw new NotImplementedException();
+        Assert.AreEqual(-20, wallet4AvailableMinBalance);
+        Assert.AreEqual(-20, wallet5AvailableBalance);
+        Assert.IsNull(wallet6AvailableBalance);
     }
 
     [TestMethod]

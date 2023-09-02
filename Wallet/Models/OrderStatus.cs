@@ -4,7 +4,7 @@ namespace EWallet.Models;
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum OrderStatus : byte
 {
-    Pending = 1,
+    Authorized = 1,
     Captured = 2,
     Voided = 3
 }

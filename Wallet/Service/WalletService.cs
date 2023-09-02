@@ -134,7 +134,7 @@ public class WalletService
         if (order.AuthorizedTime is not null &&
             order.CapturedTime is null)
         {
-            return OrderStatus.Pending;
+            return OrderStatus.Authorized;
         }
 
         throw new Exception("Invalid dates for wallet transfer.");

@@ -14,7 +14,7 @@ public static class OrderConverter
         else if (model.CapturedTime is not null)
             orderStatus = OrderStatus.Captured;
         else
-            orderStatus = OrderStatus.Pending;
+            orderStatus = OrderStatus.Authorized;
 
         // prepare transactions
         ArgumentNullException.ThrowIfNull(model.OrderItems);
