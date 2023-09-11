@@ -126,7 +126,6 @@ public class OrderService
         {
             PreCalculateOrderItem(walletBalances, item);
         }
-
     }
 
     private void PreCalculateOrderItem(List<WalletBalanceModel> walletBalances, OrderItemModel item)
