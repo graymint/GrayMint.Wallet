@@ -12,6 +12,7 @@ public class WalletService
     public WalletService(WalletRepo walletRepo)
     {
         _walletRepo = walletRepo;
+
     }
 
     public async Task<Wallet> Create(int appId)
