@@ -2,7 +2,6 @@
 
 public class OrderType
 {
-    public int OrderTypeId { get; set; }
-    public int AppId { get; set; }
-    public string OrderTypeName { get; set; }
+    public required int OrderTypeId { get; set; }
+    public required string OrderTypeName { get; set; }
 }

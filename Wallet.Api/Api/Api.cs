@@ -1067,20 +1067,20 @@ namespace EWallet.Api
         partial void ProcessResponse(System.Net.Http.HttpClient client, System.Net.Http.HttpResponseMessage response);
 
         /// <exception cref="GrayMint.Common.Client.ApiException">A server side error occurred.</exception>
-        public virtual int Create(int appId, string? orderTypeName = null)
+        public virtual OrderType Create(int appId, string? orderTypeName = null)
         {
             return System.Threading.Tasks.Task.Run(async () => await CreateAsync(appId, orderTypeName, System.Threading.CancellationToken.None)).GetAwaiter().GetResult();
         }
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="GrayMint.Common.Client.ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<int> CreateAsync(int appId, string? orderTypeName = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<OrderType> CreateAsync(int appId, string? orderTypeName = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (appId == null)
                 throw new System.ArgumentNullException("appId");
 
             var urlBuilder_ = new System.Text.StringBuilder();
-            urlBuilder_.Append("api/v1/apps/{appId}/ordertypes?");
+            urlBuilder_.Append("api/v1/apps/{appId}/order-types?");
             urlBuilder_.Replace("{appId}", System.Uri.EscapeDataString(ConvertToString(appId, System.Globalization.CultureInfo.InvariantCulture)));
             if (orderTypeName != null)
             {
@@ -1121,7 +1121,7 @@ namespace EWallet.Api
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 201)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<int>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<OrderType>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new GrayMint.Common.Client.ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -1162,7 +1162,7 @@ namespace EWallet.Api
                 throw new System.ArgumentNullException("appId");
 
             var urlBuilder_ = new System.Text.StringBuilder();
-            urlBuilder_.Append("api/v1/apps/{appId}/ordertypes");
+            urlBuilder_.Append("api/v1/apps/{appId}/order-types");
             urlBuilder_.Replace("{appId}", System.Uri.EscapeDataString(ConvertToString(appId, System.Globalization.CultureInfo.InvariantCulture)));
 
             var client_ = _httpClient;
@@ -1642,7 +1642,7 @@ namespace EWallet.Api
                     var content_ = new System.Net.Http.StringContent(json_);
                     content_.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("application/json");
                     request_.Content = content_;
-                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Method = new System.Net.Http.HttpMethod("POST");
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
                     PrepareRequest(client_, request_, urlBuilder_);
@@ -1827,6 +1827,10 @@ namespace EWallet.Api
         [Newtonsoft.Json.JsonProperty("orderTypeId", Required = Newtonsoft.Json.Required.Always)]
         public int OrderTypeId { get; set; } = default!;
 
+        [Newtonsoft.Json.JsonProperty("orderTypeName", Required = Newtonsoft.Json.Required.Always)]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string OrderTypeName { get; set; } = default!;
+
         [Newtonsoft.Json.JsonProperty("status", Required = Newtonsoft.Json.Required.Always)]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
@@ -1939,9 +1943,6 @@ namespace EWallet.Api
     {
         [Newtonsoft.Json.JsonProperty("orderTypeId", Required = Newtonsoft.Json.Required.Always)]
         public int OrderTypeId { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("appId", Required = Newtonsoft.Json.Required.Always)]
-        public int AppId { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("orderTypeName", Required = Newtonsoft.Json.Required.Always)]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]

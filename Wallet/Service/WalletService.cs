@@ -184,7 +184,7 @@ public class WalletService
         return currencyModel.CurrencyId;
     }
 
-    public async Task<int> CreateOrderType(int appId, string orderTypeName)
+    public async Task<OrderType> CreateOrderType(int appId, string orderTypeName)
     {
         var orderType = new OrderTypeModel
         {
@@ -195,7 +195,11 @@ public class WalletService
         await _walletRepo.AddEntity(orderType);
         await _walletRepo.SaveChangesAsync();
 
-        return orderType.OrderTypeId;
+        return new OrderType
+        {
+            OrderTypeId = orderType.OrderTypeId,
+            OrderTypeName = orderTypeName
+        };
     }
     public async Task<OrderType[]> GetOrderTypes(int appId)
     {
@@ -203,7 +207,6 @@ public class WalletService
         return orderTypes.Select(o => new OrderType
         {
             OrderTypeName = o.OrderTypeName,
-            AppId = o.AppId,
             OrderTypeId = o.OrderTypeId
         }).ToArray();
     }

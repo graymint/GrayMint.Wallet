@@ -18,7 +18,7 @@ public class OrderTypesController : ControllerBase
 
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
-    public async Task<ActionResult<int>> Create(int appId, string orderTypeName)
+    public async Task<ActionResult<OrderType>> Create(int appId, string orderTypeName)
     {
         return StatusCode(StatusCodes.Status201Created, await _walletService.CreateOrderType(appId,orderTypeName));
     }

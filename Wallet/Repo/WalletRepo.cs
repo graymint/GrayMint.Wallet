@@ -115,6 +115,7 @@ public class WalletRepo
     {
         return await _walletDbContext.Orders
             .Include(o => o.OrderItems)
+            .Include(x => x.OrderType)
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
@@ -122,6 +123,7 @@ public class WalletRepo
     {
         return await _walletDbContext.Orders
             .Include(x => x.App)
+            .Include(x => x.OrderType)
             .Include(o => o.OrderItems)!
             .ThenInclude(x => x.OrderTransactions)
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
