@@ -20,6 +20,8 @@ public class WalletDbContext : DbContext
     public DbSet<WalletBalanceModel> WalletBalances { get; set; } = default!;
     public DbSet<WalletModel> Wallets { get; set; } = default!;
     public DbSet<OrderItemModel> OrderItems { get; set; } = default!;
+    public DbSet<OrderTypeModel> OrderTypes { get; set; } = default!;
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -68,6 +70,12 @@ public class WalletDbContext : DbContext
                 .WithMany(e => e.Orders)
                 .HasForeignKey(e => e.CurrencyId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(e => e.OrderType)
+        .WithMany(e => e.Orders)
+        .HasForeignKey(e => e.OrderTypeId)
+        .OnDelete(DeleteBehavior.NoAction);
+
         });
 
         modelBuilder.Entity<WalletTransactionModel>(entity =>
@@ -122,6 +130,16 @@ public class WalletDbContext : DbContext
         {
             entity.Property(w => w.WalletId).ValueGeneratedOnAdd();
             entity.HasKey(w => w.WalletId);
+        });
+
+        modelBuilder.Entity<OrderTypeModel>(entity =>
+        {
+            entity.HasKey(w => w.OrderTypeId);
+            entity.Property(w => w.OrderTypeId).ValueGeneratedOnAdd();
+            entity.Property(w => w.OrderTypeName).IsRequired().HasMaxLength(40);
+
+
+
         });
     }
 

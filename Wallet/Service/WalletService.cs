@@ -183,4 +183,28 @@ public class WalletService
         var currencyModel = await _walletRepo.GetCurrency(appId, currencyId);
         return currencyModel.CurrencyId;
     }
+
+    public async Task<int> CreateOrderType(int appId, string orderTypeName)
+    {
+        var orderType = new OrderTypeModel
+        {
+            AppId = appId,
+            OrderTypeName = orderTypeName
+        };
+
+        await _walletRepo.AddEntity(orderType);
+        await _walletRepo.SaveChangesAsync();
+
+        return orderType.OrderTypeId;
+    }
+    public async Task<OrderType[]> GetOrderTypes(int appId)
+    {
+        var orderTypes = await _walletRepo.GetOrderTypes(appId);
+        return orderTypes.Select(o => new OrderType
+        {
+            OrderTypeName = o.OrderTypeName,
+            AppId = o.AppId,
+            OrderTypeId = o.OrderTypeId
+        }).ToArray();
+    }
 }

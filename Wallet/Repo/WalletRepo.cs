@@ -144,4 +144,11 @@ public class WalletRepo
         //    .ToArrayAsync();
         throw new NotImplementedException();
     }
+
+    public async Task<OrderTypeModel[]> GetOrderTypes(int appId)
+    {
+        return await _walletDbContext.OrderTypes
+                     .Where(c => c.AppId == appId)
+                     .ToArrayAsync();
+    }
 }

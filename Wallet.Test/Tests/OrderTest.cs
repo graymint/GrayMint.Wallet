@@ -709,9 +709,11 @@ public class OrderTest : BaseControllerTest
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom3.Wallet.WalletId, amount: 90, transactionType: TransactionType.Authorize);
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom4.Wallet.WalletId, amount: 10, transactionType: TransactionType.Authorize);
 
+        var orderTypeId = await TestInit1.OrderTypesClient.CreateAsync(TestInit1.AppId, Guid.NewGuid().ToString());
         // Create order request
         var request = new CreateOrderRequest
         {
+            OrderTypeId = orderTypeId,
             OrderId = Guid.NewGuid(),
             CurrencyId = systemWalletDom.CurrencyId,
             TransactionType = TransactionType.Authorize,
@@ -811,9 +813,11 @@ public class OrderTest : BaseControllerTest
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom4.Wallet.WalletId, amount: 20, transactionType: TransactionType.Sale);
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom5.Wallet.WalletId, amount: 40, transactionType: TransactionType.Sale);
 
+        var orderTypeId = await TestInit1.OrderTypesClient.CreateAsync(TestInit1.AppId, Guid.NewGuid().ToString());
         // Create order request
         var request = new CreateOrderRequest
         {
+            OrderTypeId = orderTypeId,
             OrderId = Guid.NewGuid(),
             CurrencyId = systemWalletDom.CurrencyId,
             TransactionType = TransactionType.Sale,
@@ -1112,9 +1116,11 @@ public class OrderTest : BaseControllerTest
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom4.Wallet.WalletId, amount: 20, transactionType: TransactionType.Sale);
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom5.Wallet.WalletId, amount: 40, transactionType: TransactionType.Sale);
 
+        var orderTypeId = await TestInit1.OrderTypesClient.CreateAsync(TestInit1.AppId, Guid.NewGuid().ToString());
         // Create order request
         var request = new CreateOrderRequest
         {
+            OrderTypeId = orderTypeId,
             OrderId = Guid.NewGuid(),
             CurrencyId = systemWalletDom.CurrencyId,
             TransactionType = TransactionType.Authorize,
@@ -1183,9 +1189,11 @@ public class OrderTest : BaseControllerTest
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom3.Wallet.WalletId, amount: 90, transactionType: TransactionType.Authorize);
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom4.Wallet.WalletId, amount: 10, transactionType: TransactionType.Authorize);
 
+        var orderTypeId = await TestInit1.OrderTypesClient.CreateAsync(TestInit1.AppId, Guid.NewGuid().ToString());
         // Create order request
         var request = new CreateOrderRequest
         {
+            OrderTypeId = orderTypeId,
             OrderId = Guid.NewGuid(),
             CurrencyId = systemWalletDom.CurrencyId,
             TransactionType = TransactionType.Sale,

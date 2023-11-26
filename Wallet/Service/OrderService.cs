@@ -281,6 +281,7 @@ public class OrderService
         {
             OrderReferenceNumber = request.OrderId,
             CurrencyId = request.CurrencyId,
+            OrderTypeId = request.OrderTypeId,
             AppId = appId,
             CreatedTime = DateTime.UtcNow,
             ModifiedTime = DateTime.UtcNow,

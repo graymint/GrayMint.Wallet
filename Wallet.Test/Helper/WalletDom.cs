@@ -35,7 +35,7 @@ public class WalletDom
     }
 
     public async Task<Order> CreateOrder(TestInit testInit, int? senderWalletId = null, int? receiverWalletId = null, decimal? amount = null,
-        int? currencyId = null, Guid? orderId = null, TransactionType transactionType = TransactionType.Authorize)
+        int? currencyId = null, Guid? orderId = null, TransactionType transactionType = TransactionType.Authorize, int? orderTypeId=null)
     {
         var random = new Random();
         amount ??= random.Next(0, 100000);
@@ -63,9 +63,11 @@ public class WalletDom
         ArgumentNullException.ThrowIfNull(senderWalletBefore.Currencies);
         ArgumentNullException.ThrowIfNull(receiverWalletBefore.Currencies);
 
+        orderTypeId??= await testInit.OrderTypesClient.CreateAsync(testInit.AppId,Guid.NewGuid().ToString());
         // create Sale order between created wallets
         var request = new CreateOrderRequest
         {
+            OrderTypeId = orderTypeId.Value,
             CurrencyId = (int)currencyId,
             OrderId = (Guid)orderId,
             TransactionType = transactionType,

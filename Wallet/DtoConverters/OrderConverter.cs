@@ -22,6 +22,7 @@ public static class OrderConverter
         {
             OrderId = model.OrderReferenceNumber,
             CurrencyId = model.CurrencyId,
+            OrderTypeId = model.OrderTypeId,
             CreatedTime = model.CreatedTime,
             AuthorizedTime = model.CreatedTime,
             CapturedTime = model.CapturedTime,
