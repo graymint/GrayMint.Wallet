@@ -137,9 +137,8 @@ public class WalletDbContext : DbContext
             entity.HasKey(w => w.OrderTypeId);
             entity.Property(w => w.OrderTypeId).ValueGeneratedOnAdd();
             entity.Property(w => w.OrderTypeName).IsRequired().HasMaxLength(40);
-
-
-
+            entity.HasIndex(w => new { w.AppId, w.OrderTypeName })
+                .IsUnique();
         });
     }
 
