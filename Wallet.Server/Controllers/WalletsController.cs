@@ -37,7 +37,7 @@ public class WalletsController : ControllerBase
         return order;
     }
 
-    [HttpGet("{walletId}/min-balance")]
+    [HttpPost("{walletId}/min-balance")]
     public async Task<Wallet> SetMinBalance(int appId, int walletId, SetMinBalanceRequest request)
     {
         var wallet = await _walletService.SetMinBalance(appId, walletId, request);
