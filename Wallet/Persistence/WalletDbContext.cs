@@ -68,6 +68,7 @@ public class WalletDbContext : DbContext
                 .WithMany(e => e.Orders)
                 .HasForeignKey(e => e.CurrencyId)
                 .OnDelete(DeleteBehavior.NoAction);
+
         });
 
         modelBuilder.Entity<WalletTransactionModel>(entity =>
@@ -123,6 +124,8 @@ public class WalletDbContext : DbContext
             entity.Property(w => w.WalletId).ValueGeneratedOnAdd();
             entity.HasKey(w => w.WalletId);
         });
+
+ 
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

@@ -6,6 +6,7 @@ public class OrderModel
     public int AppId { get; set; }
     public int CurrencyId { get; set; }
     public TransactionType TransactionType { get; set; }
+    public int OrderTypeId { get; set; }
     public DateTime? AuthorizedTime { get; set; }
     public DateTime? CapturedTime { get; set; }
     public DateTime? VoidedTime { get; set; }
@@ -17,4 +18,5 @@ public class OrderModel
     public virtual CurrencyModel? Currency { get; set; }
     public virtual TransactionTypeLookup? TransactionTypeLookup { get; set; }
     public virtual ICollection<OrderItemModel>? OrderItems { get; set; }
+ 
 }

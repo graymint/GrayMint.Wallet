@@ -14,8 +14,8 @@ public class Program
     public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
-
-        builder.AddGrayMintCommonServices(new GrayMintCommonOptions { AppName = "Wallet" }, new RegisterServicesOptions());
+ 
+      builder.AddGrayMintCommonServices(new GrayMintCommonOptions { AppName = "Wallet" }, new RegisterServicesOptions());
         builder.Services.AddDbContext<WalletDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("WalletDatabase")));
         builder.Services.AddScoped<AppService>();
         builder.Services.AddScoped<WalletService>();
