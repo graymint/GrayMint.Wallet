@@ -16,14 +16,12 @@ public static class OrderConverter
         else
             orderStatus = OrderStatus.Authorized;
 
-        ArgumentNullException.ThrowIfNull(model.OrderType);
         ArgumentNullException.ThrowIfNull(model.OrderItems);
         return new Order
         {
             OrderId = model.OrderReferenceNumber,
             CurrencyId = model.CurrencyId,
             OrderTypeId = model.OrderTypeId,
-            OrderTypeName = model.OrderType.OrderTypeName,
             CreatedTime = model.CreatedTime,
             AuthorizedTime = model.CreatedTime,
             CapturedTime = model.CapturedTime,

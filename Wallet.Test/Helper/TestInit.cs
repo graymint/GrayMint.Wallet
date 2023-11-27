@@ -16,7 +16,6 @@ public class TestInit
     public CurrenciesClient CurrenciesClient => new(HttpClient);
     public WalletsClient WalletsClient => new(HttpClient);
     public OrdersClient OrdersClient => new(HttpClient);
-    public OrderTypesClient OrderTypesClient => new(HttpClient);
     public int AppId { get; set; }
     public int SystemWalletId { get; set; }
 

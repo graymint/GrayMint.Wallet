@@ -18,5 +18,5 @@ public class OrderModel
     public virtual CurrencyModel? Currency { get; set; }
     public virtual TransactionTypeLookup? TransactionTypeLookup { get; set; }
     public virtual ICollection<OrderItemModel>? OrderItems { get; set; }
-    public virtual OrderTypeModel? OrderType { get; set; }
+ 
 }

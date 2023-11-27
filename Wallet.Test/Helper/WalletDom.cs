@@ -65,8 +65,8 @@ public class WalletDom
 
         if (orderTypeId is null)
         {
-            var orderType = await testInit.OrderTypesClient.CreateAsync(testInit.AppId, Guid.NewGuid().ToString());
-            orderTypeId = orderType.OrderTypeId;
+        
+            orderTypeId = new Random().Next(int.MinValue,int.MaxValue);
         }
         // create Sale order between created wallets
         var request = new CreateOrderRequest
