@@ -83,6 +83,20 @@ public class WalletTest : BaseControllerTest
     }
 
     [TestMethod]
+    public async Task Fail_Get_Transactions_Of_Specified_Wallets_With_Invalid_WalletIds()
+    {
+        try
+        {
+            await TestInit1.WalletsClient.GetWalletTransactionsOfParticipantsAsync(TestInit1.AppId, Guid.NewGuid().ToString());
+            Assert.Fail("Invalid string format expected");
+        }
+        catch (ApiException ex)
+        {
+            Assert.IsTrue(ex.Message.Contains("was not in a correct format"));
+        }
+    }
+
+    [TestMethod]
     public async Task Success_MinBalance_when_does_not_set_yet()
     {
         // create dom
