@@ -127,7 +127,7 @@ public class WalletRepo
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
-    public async Task<OrderModel[]> GetOrdersByWalletIds(int appId, int[] walletIds, DateTime? beginTime = null, DateTime? endTime = null, int? pageSize = null, int? pageNumber = null)
+    public async Task<OrderItemModel[]> GetOrderItemsByWalletIds(int appId, int[] walletIds, DateTime? beginTime = null, DateTime? endTime = null, int? pageSize = null, int? pageNumber = null)
     {
         const int days = 31;
         if (beginTime.HasValue && endTime.HasValue && (endTime.Value - beginTime.Value).TotalDays > days)
@@ -151,13 +151,12 @@ public class WalletRepo
         var skip = pageNumber is -1 ? 0 : (pageNumber - 1) * pageSize;
         ArgumentNullException.ThrowIfNull(skip);
 
-        var query = _walletDbContext.Orders
-            .Include(x => x.Currency)
-            .Include(x => x.OrderItems)
-            .Where(x => x.AppId == appId)
-            .Where(x => x.OrderItems!.Any(o => walletIds.Any(i => i == o.SenderWalletId) || walletIds.Any(i => i == o.ReceiverWalletId)))
-            .Where(x => x.CreatedTime >= beginTime)
-            .Where(x => x.CreatedTime < endTime)
+        var query = _walletDbContext.OrderItems
+            .Include(x => x.Order)
+            .Where(x => x.Order!.AppId == appId)
+            .Where(x => walletIds.Any(i => i == x.SenderWalletId) || walletIds.Any(i => i == x.ReceiverWalletId))
+            .Where(x => x.Order!.CreatedTime >= beginTime)
+            .Where(x => x.Order!.CreatedTime < endTime)
             .OrderByDescending(x => x.OrderId)
             .Skip(skip.Value)
             .Take(pageSize.Value);

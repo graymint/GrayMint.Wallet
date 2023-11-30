@@ -78,8 +78,8 @@ public class WalletTest : BaseControllerTest
             $"{walletDom.Wallet.WalletId},{walletDom2.Wallet.WalletId}");
 
         Assert.AreEqual(orders.Count, 1);
-        Assert.IsNotNull(orders.SingleOrDefault(x => x.Items.First().SenderWalletId == walletDom.Wallet.WalletId && x.Items.First().ReceiverWalletId == walletDom2.Wallet.WalletId));
-        Assert.IsNull(orders.SingleOrDefault(x => x.Items.First().SenderWalletId == walletDom3.Wallet.WalletId && x.Items.First().ReceiverWalletId == walletDom4.Wallet.WalletId));
+        Assert.IsNotNull(orders.SingleOrDefault(x => x.SenderWalletId == walletDom.Wallet.WalletId && x.ReceiverWalletId == walletDom2.Wallet.WalletId));
+        Assert.IsNull(orders.SingleOrDefault(x => x.SenderWalletId == walletDom3.Wallet.WalletId && x.ReceiverWalletId == walletDom4.Wallet.WalletId));
     }
 
     [TestMethod]
