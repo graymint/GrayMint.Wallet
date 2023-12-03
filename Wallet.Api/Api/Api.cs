@@ -1223,14 +1223,14 @@ namespace EWallet.Api
         }
 
         /// <exception cref="GrayMint.Common.Client.ApiException">A server side error occurred.</exception>
-        public virtual System.Collections.Generic.ICollection<OrderItemView> GetWalletTransactionsOfParticipants(int appId, string? participantWalletIds = null, System.DateTime? beginTime = null, System.DateTime? endTime = null, int? pageSize = null, int? pageNumber = null)
+        public virtual System.Collections.Generic.ICollection<OrderItemView> GetWalletTransactionsByParticipants(int appId, string? participantWalletIds = null, System.DateTime? beginTime = null, System.DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
         {
-            return System.Threading.Tasks.Task.Run(async () => await GetWalletTransactionsOfParticipantsAsync(appId, participantWalletIds, beginTime, endTime, pageSize, pageNumber, System.Threading.CancellationToken.None)).GetAwaiter().GetResult();
+            return System.Threading.Tasks.Task.Run(async () => await GetWalletTransactionsByParticipantsAsync(appId, participantWalletIds, beginTime, endTime, orderTypeId, pageSize, pageNumber, System.Threading.CancellationToken.None)).GetAwaiter().GetResult();
         }
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="GrayMint.Common.Client.ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.ICollection<OrderItemView>> GetWalletTransactionsOfParticipantsAsync(int appId, string? participantWalletIds = null, System.DateTime? beginTime = null, System.DateTime? endTime = null, int? pageSize = null, int? pageNumber = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.ICollection<OrderItemView>> GetWalletTransactionsByParticipantsAsync(int appId, string? participantWalletIds = null, System.DateTime? beginTime = null, System.DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (appId == null)
                 throw new System.ArgumentNullException("appId");
@@ -1249,6 +1249,10 @@ namespace EWallet.Api
             if (endTime != null)
             {
                 urlBuilder_.Append(System.Uri.EscapeDataString("endTime") + "=").Append(System.Uri.EscapeDataString(endTime.Value.ToString("o", System.Globalization.CultureInfo.InvariantCulture))).Append("&");
+            }
+            if (orderTypeId != null)
+            {
+                urlBuilder_.Append(System.Uri.EscapeDataString("orderTypeId") + "=").Append(System.Uri.EscapeDataString(ConvertToString(orderTypeId, System.Globalization.CultureInfo.InvariantCulture))).Append("&");
             }
             if (pageSize != null)
             {

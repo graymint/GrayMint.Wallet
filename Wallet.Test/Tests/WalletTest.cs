@@ -74,7 +74,7 @@ public class WalletTest : BaseControllerTest
         await walletDom3.CreateOrder(TestInit1, transactionType: TransactionType.Sale,
             receiverWalletId: walletDom4.Wallet.WalletId, amount: 100);
 
-        var orders = await TestInit1.WalletsClient.GetWalletTransactionsOfParticipantsAsync(TestInit1.AppId,
+        var orders = await TestInit1.WalletsClient.GetWalletTransactionsByParticipantsAsync(TestInit1.AppId,
             $"{walletDom.Wallet.WalletId},{walletDom2.Wallet.WalletId}");
 
         Assert.AreEqual(orders.Count, 1);
@@ -87,7 +87,7 @@ public class WalletTest : BaseControllerTest
     {
         try
         {
-            await TestInit1.WalletsClient.GetWalletTransactionsOfParticipantsAsync(TestInit1.AppId, Guid.NewGuid().ToString());
+            await TestInit1.WalletsClient.GetWalletTransactionsByParticipantsAsync(TestInit1.AppId, Guid.NewGuid().ToString());
             Assert.Fail("Invalid string format expected");
         }
         catch (ApiException ex)
