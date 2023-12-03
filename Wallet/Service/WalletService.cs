@@ -72,7 +72,7 @@ public class WalletService
         return await Get(appId, walletId);
     }
 
-    public async Task<OrderItemView[]> GetWalletTransactionsOfParticipantWallets(int appId,
+    public async Task<OrderItemView[]> GetWalletTransactionsByParticipantWallets(int appId,
         string participantWalletIds, DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
         // Parse walletIds

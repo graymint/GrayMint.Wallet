@@ -30,10 +30,10 @@ public class WalletsController : ControllerBase
     }
 
     [HttpGet("transactions-by-participants")]
-    public async Task<OrderItemView[]> GetWalletTransactionsOfParticipants(int appId, string participantWalletIds,
+    public async Task<OrderItemView[]> GetWalletTransactionsByParticipants(int appId, string participantWalletIds,
         DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
-        var orderItemViews = await _walletService.GetWalletTransactionsOfParticipantWallets(appId, participantWalletIds, beginTime, endTime, orderTypeId, pageSize, pageNumber);
+        var orderItemViews = await _walletService.GetWalletTransactionsByParticipantWallets(appId, participantWalletIds, beginTime, endTime, orderTypeId, pageSize, pageNumber);
         return orderItemViews;
     }
 
