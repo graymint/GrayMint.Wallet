@@ -127,7 +127,7 @@ public class WalletRepo
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
-    public async Task<OrderItemModel[]> GetOrderItemsByWalletIds(int appId, int[] walletIds, DateTime? beginTime = null, DateTime? endTime = null, int? pageSize = null, int? pageNumber = null)
+    public async Task<OrderItemModel[]> GetOrderItemsByWalletIds(int appId, int[] walletIds, DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
         const int days = 31;
         if (beginTime.HasValue && endTime.HasValue && (endTime.Value - beginTime.Value).TotalDays > days)
@@ -155,6 +155,7 @@ public class WalletRepo
             .Include(x => x.Order)
             .Where(x => x.Order!.AppId == appId)
             .Where(x => walletIds.Any(i => i == x.SenderWalletId) || walletIds.Any(i => i == x.ReceiverWalletId))
+            .Where(x => x.Order!.OrderTypeId == orderTypeId || orderTypeId == null)
             .Where(x => x.Order!.CreatedTime >= beginTime)
             .Where(x => x.Order!.CreatedTime < endTime)
             .OrderByDescending(x => x.OrderId)
