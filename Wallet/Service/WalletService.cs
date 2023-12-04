@@ -1,6 +1,7 @@
 ﻿using EWallet.DtoConverters;
 using EWallet.Dtos;
 using EWallet.Models;
+using EWallet.Models.Views;
 using EWallet.Repo;
 
 namespace EWallet.Service;
@@ -84,7 +85,7 @@ public class WalletService
         var orders = await _walletRepo.GetOrderItemsByWalletIds(
         appId, walletId, participantWalletId, beginTime, endTime, orderTypeId, pageSize, pageNumber);
 
-        return orders.Select(x => x.ToDto()).ToArray();
+        return orders;
     }
 
     public OrderStatus GetStatusOfOrder(OrderModel order)

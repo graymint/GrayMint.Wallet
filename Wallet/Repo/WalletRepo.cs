@@ -1,4 +1,6 @@
-﻿using EWallet.Models;
+﻿using EWallet.DtoConverters;
+using EWallet.Models;
+using EWallet.Models.Views;
 using EWallet.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -127,7 +129,7 @@ public class WalletRepo
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
-    public async Task<OrderItemModel[]> GetOrderItemsByWalletIds(int appId, int walletId, int? participantWalletId = null,
+    public async Task<OrderItemView[]> GetOrderItemsByWalletIds(int appId, int walletId, int? participantWalletId = null,
         DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
         const int days = 31;
@@ -160,6 +162,17 @@ public class WalletRepo
             .Where(x => x.Order!.OrderTypeId == orderTypeId || orderTypeId == null)
             .Where(x => x.Order!.CreatedTime >= beginTime)
             .Where(x => x.Order!.CreatedTime < endTime)
+            .Select(x => new OrderItemView
+            {
+                SenderWalletId = x.SenderWalletId,
+                ReceiverWalletId = x.ReceiverWalletId,
+                Status = OrderStatusConverter.ToDto(x.Order!.VoidedTime, x.Order.CapturedTime),
+                Amount = x.Amount,
+                CurrencyId = x.Order.CurrencyId,
+                OrderId = x.Order.OrderReferenceNumber,
+                OrderItemId = x.OrderItemId,
+                OrderTypeId = x.Order.OrderTypeId
+            })
             .OrderByDescending(x => x.OrderId)
             .Skip(skip.Value)
             .Take(pageSize.Value);
