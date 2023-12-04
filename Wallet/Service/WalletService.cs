@@ -72,14 +72,17 @@ public class WalletService
         return await Get(appId, walletId);
     }
 
-    public async Task<OrderItemView[]> GetWalletTransactionsByParticipantWallets(int appId,
-        string participantWalletIds, DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
+    public async Task<OrderItemView[]> GetWalletTransactions(int appId,
+        int walletId, int? participantWalletId = null, DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
-        // Parse walletIds
-        var walletIds = participantWalletIds.Split(",").Select(int.Parse).ToArray();
+        await Get(appId, walletId);
+
+        if (participantWalletId is not null)
+            await Get(appId, (int)participantWalletId);
 
         // Get orders that contain transaction of participant wallets
-        var orders = await _walletRepo.GetOrderItemsByWalletIds(appId, walletIds, beginTime, endTime, orderTypeId, pageSize, pageNumber);
+        var orders = await _walletRepo.GetOrderItemsByWalletIds(
+        appId, walletId, participantWalletId, beginTime, endTime, orderTypeId, pageSize, pageNumber);
 
         return orders.Select(x => x.ToDto()).ToArray();
     }

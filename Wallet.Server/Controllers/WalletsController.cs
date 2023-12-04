@@ -29,11 +29,12 @@ public class WalletsController : ControllerBase
         return await _walletService.Get(appId, walletId);
     }
 
-    [HttpGet("transactions-by-participants")]
-    public async Task<OrderItemView[]> GetWalletTransactionsByParticipants(int appId, string participantWalletIds,
+    [HttpGet("transactions")]
+    public async Task<OrderItemView[]> GetWalletTransactions(int appId, int walletId, int? participantWalletId = null,
         DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
-        var orderItemViews = await _walletService.GetWalletTransactionsByParticipantWallets(appId, participantWalletIds, beginTime, endTime, orderTypeId, pageSize, pageNumber);
+        var orderItemViews = await _walletService.GetWalletTransactions(
+            appId, walletId, participantWalletId, beginTime, endTime, orderTypeId, pageSize, pageNumber);
         return orderItemViews;
     }
 
