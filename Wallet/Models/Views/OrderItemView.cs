@@ -10,4 +10,5 @@ public class OrderItemView
     public required int ReceiverWalletId { get; init; }
     public required decimal Amount { get; init; }
     public required OrderStatus Status { get; init; }
+    public required DateTime CreatedTime { get; init; }
 }

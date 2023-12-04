@@ -171,7 +171,8 @@ public class WalletRepo
                 CurrencyId = x.Order.CurrencyId,
                 OrderId = x.Order.OrderReferenceNumber,
                 OrderItemId = x.OrderItemId,
-                OrderTypeId = x.Order.OrderTypeId
+                OrderTypeId = x.Order.OrderTypeId,
+                CreatedTime = x.Order.CreatedTime
             })
             .OrderByDescending(x => x.OrderId)
             .Skip(skip.Value)
