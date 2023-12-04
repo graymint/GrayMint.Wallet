@@ -72,49 +72,16 @@ public class WalletService
         return await Get(appId, walletId);
     }
 
-    public async Task<Order[]> GetWalletTransactionsOfParticipantWallets(int appId,
-        string participantWalletIds, DateTime? beginTime, DateTime? endTime, int? recordCount, int? recordIndex)
+    public async Task<OrderItemView[]> GetWalletTransactionsByParticipantWallets(int appId,
+        string participantWalletIds, DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
-        //// Parse walletIds
-        //var walletIds = participantWalletIds.Split(",").Select(int.Parse).ToArray();
+        // Parse walletIds
+        var walletIds = participantWalletIds.Split(",").Select(int.Parse).ToArray();
 
-        //// Get orders that contain transaction of participant wallets
-        //var orders = await _walletRepo.GetOrdersByWalletIds(appId, walletIds, beginTime, endTime, recordCount, recordIndex);
+        // Get orders that contain transaction of participant wallets
+        var orders = await _walletRepo.GetOrderItemsByWalletIds(appId, walletIds, beginTime, endTime, orderTypeId, pageSize, pageNumber);
 
-        //// List of orders
-        //var result = new List<Order>();
-
-        //// Get decreased records
-        //foreach (var order in orders)
-        //{
-        //    var decreasedRecords = order.OrderTransactionModels!.Where(t => t.Amount < 0 && (walletIds.Any(i => i == t.WalletId) || walletIds.Any(i => i == t.ReferenceWalletTransaction!.WalletId)));
-
-        //    // Create transactions
-        //    var transactions = decreasedRecords.Select(transaction => new WalletTransaction(transaction.WalletTransactionId, transaction.WalletId, transaction.ReferenceWalletTransaction!.WalletId, -transaction.Amount, transaction.CreatedTime, order.AuthorizedTime, order.CapturedTime)).ToList();
-
-        //    // Check if order is voided
-        //    var voidOrder = order.VoidOrder;
-
-        //    if (voidOrder is null)
-        //    {
-        //        result.Add(new Order(order.OrderId, order.CurrencyId, order.TransactionType, GetStatusOfOrder(order),
-        //            transactions, null));
-        //    }
-        //    else
-        //    {
-        //        // Get void decreased records
-        //        var voidDecreasedRecords = voidOrder!.OrderTransactionModels!.Where(t => t.Amount < 0 && (walletIds.Any(i => i == t.WalletId) || walletIds.Any(i => i == t.ReferenceWalletTransaction!.WalletId)));
-
-        //        // Create void transactions
-        //        var voidTransactions = voidDecreasedRecords.Select(transaction => new WalletTransaction(transaction.WalletTransactionId, transaction.WalletId, transaction.ReferenceWalletTransaction!.WalletId, -transaction.Amount, transaction.CreatedTime, voidOrder.AuthorizedTime, voidOrder.CapturedTime)).ToList();
-
-        //        result.Add(new Order(order.OrderId, order.CurrencyId, order.TransactionType, GetStatusOfOrder(order),
-        //            transactions, new Order(voidOrder.OrderId, voidOrder.CurrencyId, voidOrder.TransactionType, OrderStatus.Captured, voidTransactions, null)));
-        //    }
-        //}
-
-        //return result.ToArray();
-        throw new NotImplementedException();
+        return orders.Select(x => x.ToDto()).ToArray();
     }
 
     public OrderStatus GetStatusOfOrder(OrderModel order)

@@ -127,22 +127,42 @@ public class WalletRepo
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
-    public async Task<OrderModel[]> GetOrdersByWalletIds(int appId, int[] walletIds, DateTime? beginTime, DateTime? endTime, int? recordCount, int? recordIndex)
+    public async Task<OrderItemModel[]> GetOrderItemsByWalletIds(int appId, int[] walletIds, DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
-        //var currentRecordIndex = recordIndex ?? 1;
-        //var currentRecordCount = recordCount ?? 10;
+        const int days = 31;
+        if (beginTime.HasValue && endTime.HasValue && (endTime.Value - beginTime.Value).TotalDays > days)
+            throw new Exception("The report works for one month.");
 
-        //beginTime ??= DateTime.MinValue;
-        //endTime ??= DateTime.UtcNow;
+        if (beginTime == null && endTime == null)
+        {
+            beginTime = DateTime.UtcNow.AddDays(-days);
+            endTime = DateTime.UtcNow;
+        }
 
-        //return await _walletDbContext.Orders
-        //    .Include(o => o.OrderTransactionModels)
-        //    .Where(o => o.AppId == appId && o.OrderTransactionModels!.Any(t => walletIds.Any(i => i == t.WalletId) || walletIds.Any(i => i == t.ReferenceWalletTransaction!.WalletId)) && o.CreatedTime >= beginTime && o.CreatedTime < endTime)
-        //    .OrderByDescending(t => t.CreatedTime)
-        //    .Skip((currentRecordIndex - 1) * currentRecordCount)
-        //    .Take(currentRecordCount)
-        //    .ToArrayAsync();
-        throw new NotImplementedException();
+        if (beginTime == null && endTime != null)
+            beginTime = endTime.Value.AddDays(-days);
+
+        if (beginTime != null && endTime == null)
+            endTime = beginTime.Value.AddDays(days);
+        if (beginTime > endTime) throw new Exception("BeginTime must be less than EndTime.");
+
+        pageNumber ??= -1;
+        pageSize = pageNumber is -1 ? int.MaxValue : pageSize is null or < 0 ? 101 : pageSize;
+        var skip = pageNumber is -1 ? 0 : (pageNumber - 1) * pageSize;
+        ArgumentNullException.ThrowIfNull(skip);
+
+        var query = _walletDbContext.OrderItems
+            .Include(x => x.Order)
+            .Where(x => x.Order!.AppId == appId)
+            .Where(x => walletIds.Any(i => i == x.SenderWalletId) || walletIds.Any(i => i == x.ReceiverWalletId))
+            .Where(x => x.Order!.OrderTypeId == orderTypeId || orderTypeId == null)
+            .Where(x => x.Order!.CreatedTime >= beginTime)
+            .Where(x => x.Order!.CreatedTime < endTime)
+            .OrderByDescending(x => x.OrderId)
+            .Skip(skip.Value)
+            .Take(pageSize.Value);
+
+        return await query.ToArrayAsync();
     }
 
 }
