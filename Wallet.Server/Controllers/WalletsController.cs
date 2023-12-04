@@ -1,4 +1,5 @@
 ﻿using EWallet.Dtos;
+using EWallet.Models.Views;
 using EWallet.Service;
 using Microsoft.AspNetCore.Mvc;
 
