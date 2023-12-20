@@ -120,10 +120,10 @@ public class WalletRepo
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
-    public async Task<OrderModel?> FindOrder(int appId, Guid orderId)
+    public async Task<bool> ExistOrder(int appId, Guid orderId)
     {
         return await _walletDbContext.Orders
-         .SingleOrDefaultAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
+         .AnyAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
     public async Task<OrderModel> GetOrderFull(int appId, Guid orderId)
     {
