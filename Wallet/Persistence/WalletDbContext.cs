@@ -59,6 +59,9 @@ public class WalletDbContext : DbContext
             entity.Property(e => e.TransactionType)
                 .HasColumnName(nameof(TransactionTypeLookup.TransactionTypeId));
 
+            entity.HasIndex(e => new { e.AppId, e.CreatedTime })
+                .IncludeProperties(x => x.OrderTypeId);
+
             entity.HasOne(e => e.TransactionTypeLookup)
                 .WithMany(e => e.OrderModels)
                 .HasForeignKey(e => e.TransactionType)
@@ -125,7 +128,7 @@ public class WalletDbContext : DbContext
             entity.HasKey(w => w.WalletId);
         });
 
- 
+
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
