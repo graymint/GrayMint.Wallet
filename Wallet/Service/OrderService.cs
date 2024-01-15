@@ -312,7 +312,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         if (request.TransactionType != TransactionType.Authorize && request.TransactionType != TransactionType.Sale)
             throw new InvalidOperationException($"{request.TransactionType} does not accepted.");
 
-        if( await _walletRepo.ExistOrder(appId, request.OrderId))
+        if( await walletRepo.ExistOrder(appId, request.OrderId))
             throw new WalletIdempotentException($"order already exist");
 
         // Validate currency
