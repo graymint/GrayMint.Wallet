@@ -76,6 +76,12 @@ public class WalletDbContext(DbContextOptions options) : DbContext(options)
                 .WithMany()
                 .HasForeignKey(e => e.AppId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.OrderItems)
+                .WithOne(e => e.Order)
+                .HasForeignKey(e => e.OrderId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<WalletTransactionModel>(entity =>
@@ -135,6 +141,11 @@ public class WalletDbContext(DbContextOptions options) : DbContext(options)
         {
             entity.Property(w => w.WalletId).ValueGeneratedOnAdd();
             entity.HasKey(w => w.WalletId);
+
+            entity.HasOne(e => e.App)
+                .WithMany()
+                .HasForeignKey(e => e.AppId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

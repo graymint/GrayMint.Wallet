@@ -45,10 +45,37 @@ public class AppService(WalletRepo walletRepo, WalletService walletService)
         return await walletRepo.GetApp(appId);
     }
 
-    public Task ClearAll(int appId)
+    public async Task ClearAll(int appId)
     {
-        return walletRepo.GetDbContext().Apps
+        await walletRepo.GetDbContext().Database.BeginTransactionAsync();
+
+        var app = await walletRepo.GetApp(appId);
+
+        int? systemWalletId = null;
+        await walletRepo.GetDbContext().Apps
+            .Where(x => x.AppId == appId)
+            .ExecuteUpdateAsync(x => x
+                .SetProperty(e => e.SystemWalletId, systemWalletId));
+
+        await walletRepo.GetDbContext().Orders
             .Where(x => x.AppId == appId)
             .ExecuteDeleteAsync();
+
+        await walletRepo.GetDbContext().Wallets
+            .Where(x => x.AppId == appId)
+            .ExecuteDeleteAsync();
+
+        await walletRepo.GetDbContext().Currencies
+            .Where(x => x.AppId == appId)
+            .ExecuteDeleteAsync();
+
+        // create wallet
+        var wallet = await walletService.Create(app.AppId);
+
+        // update app for system wallet
+        app.SystemWalletId = wallet.WalletId;
+        await walletRepo.SaveChangesAsync();
+
+        await walletRepo.GetDbContext().Database.CommitTransactionAsync();
     }
 }
