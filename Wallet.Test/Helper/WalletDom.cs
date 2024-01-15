@@ -63,11 +63,8 @@ public class WalletDom
         ArgumentNullException.ThrowIfNull(senderWalletBefore.Currencies);
         ArgumentNullException.ThrowIfNull(receiverWalletBefore.Currencies);
 
-        if (orderTypeId is null)
-        {
-        
-            orderTypeId = new Random().Next(int.MinValue,int.MaxValue);
-        }
+        orderTypeId ??= new Random().Next(int.MinValue, int.MaxValue);
+
         // create Sale order between created wallets
         var request = new CreateOrderRequest
         {

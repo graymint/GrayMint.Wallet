@@ -7,4 +7,5 @@ public class AppModel
     public DateTime CreatedTime { get; set; }
 
     public virtual WalletModel? SystemWallet { get; set; }
+    public virtual OrderModel? Orders { get; set; }
 }

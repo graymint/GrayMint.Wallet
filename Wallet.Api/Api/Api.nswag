@@ -1,5 +1,5 @@
 {
-  "runtime": "Net70",
+  "runtime": "Net80",
   "defaultVariables": null,
   "documentGenerator": {
     "aspNetCoreToOpenApi": {
@@ -62,7 +62,7 @@
   },
   "codeGenerators": {
     "openApiToCSharpClient": {
-      "clientBaseClass": null,
+      "clientBaseClass": "GrayMint.Common.Client.ApiClientCommon",
       "configurationClass": null,
       "generateClientClasses": true,
       "generateClientInterfaces": false,
@@ -78,7 +78,7 @@
       "useHttpRequestMessageCreationMethod": false,
       "useBaseUrl": false,
       "generateBaseUrlProperty": true,
-      "generateSyncMethods": true,
+      "generateSyncMethods": false,
       "generatePrepareRequestAndProcessResponseAsAsyncMethods": false,
       "exposeJsonSerializerSettings": false,
       "clientClassAccessModifier": "public",
@@ -86,7 +86,7 @@
       "generateContractsOutput": false,
       "contractsNamespace": null,
       "contractsOutputFilePath": null,
-      "parameterDateTimeFormat": "o",
+      "parameterDateTimeFormat": "s",
       "parameterDateFormat": "yyyy-MM-dd",
       "generateUpdateJsonSerializerSettingsMethod": true,
       "useRequestAndResponseSerializationSettings": false,
@@ -122,7 +122,7 @@
       "arrayBaseType": "System.Collections.ObjectModel.Collection",
       "dictionaryBaseType": "System.Collections.Generic.Dictionary",
       "classStyle": "Poco",
-      "jsonLibrary": "NewtonsoftJson",
+      "jsonLibrary": "SystemTextJson",
       "generateDefaultValues": true,
       "generateDataAnnotations": true,
       "excludedTypeNames": [],

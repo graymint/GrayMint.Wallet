@@ -3,14 +3,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EWallet.Persistence;
 
-public class WalletDbContext : DbContext
+public class WalletDbContext(DbContextOptions options) : DbContext(options)
 {
     public const string Schema = "dbo";
-
-    public WalletDbContext(DbContextOptions options) : base(options)
-    {
-
-    }
 
     public DbSet<AppModel> Apps { get; set; } = default!;
     public DbSet<CurrencyModel> Currencies { get; set; } = default!;
@@ -41,6 +36,11 @@ public class WalletDbContext : DbContext
         {
             entity.HasKey(x => x.CurrencyId);
             entity.Property(a => a.CurrencyId).ValueGeneratedOnAdd();
+
+            entity.HasOne(e => e.App)
+                .WithMany()
+                .HasForeignKey(e => e.AppId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<OrderItemModel>(entity =>
@@ -59,6 +59,9 @@ public class WalletDbContext : DbContext
             entity.Property(e => e.TransactionType)
                 .HasColumnName(nameof(TransactionTypeLookup.TransactionTypeId));
 
+            entity.HasIndex(e => new { e.AppId, e.CreatedTime })
+                .IncludeProperties(x => x.OrderTypeId);
+
             entity.HasOne(e => e.TransactionTypeLookup)
                 .WithMany(e => e.OrderModels)
                 .HasForeignKey(e => e.TransactionType)
@@ -69,6 +72,16 @@ public class WalletDbContext : DbContext
                 .HasForeignKey(e => e.CurrencyId)
                 .OnDelete(DeleteBehavior.NoAction);
 
+            entity.HasOne(e => e.App)
+                .WithMany()
+                .HasForeignKey(e => e.AppId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.OrderItems)
+                .WithOne(e => e.Order)
+                .HasForeignKey(e => e.OrderId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<WalletTransactionModel>(entity =>
@@ -91,6 +104,11 @@ public class WalletDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ReceiverWalletId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(e => e.OrderItem)
+                .WithMany()
+                .HasForeignKey(e => e.OrderItemId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<TransactionTypeLookup>(entity =>
@@ -111,7 +129,7 @@ public class WalletDbContext : DbContext
             entity.HasOne(e => e.Wallet)
                 .WithMany(x => x.WalletBalances)
                 .HasForeignKey(e => e.WalletId)
-                .OnDelete(DeleteBehavior.NoAction);
+                .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(e => e.Currency)
                 .WithMany(x => x.WalletBalances)
@@ -123,9 +141,12 @@ public class WalletDbContext : DbContext
         {
             entity.Property(w => w.WalletId).ValueGeneratedOnAdd();
             entity.HasKey(w => w.WalletId);
-        });
 
- 
+            entity.HasOne(e => e.App)
+                .WithMany()
+                .HasForeignKey(e => e.AppId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

@@ -1,15 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>EWallet.Server</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="GrayMint.Common.AspNetCore" Version="2.0.142" />
-    <PackageReference Include="NSwag.AspNetCore" Version="13.20.0.0" />
+    <PackageReference Include="GrayMint.Common.AspNetCore" Version="2.0.181" />
+    <PackageReference Include="GrayMint.Common.Swagger" Version="2.0.181" />
   </ItemGroup>
 
   <ItemGroup>
