@@ -25,6 +25,11 @@ public class WalletRepo
         await _walletDbContext.Set<TEntity>().AddRangeAsync(entity);
     }
 
+    public WalletDbContext DbContext()
+    {
+        return _walletDbContext;
+    }
+
     public async Task SaveChangesAsync()
     {
         await _walletDbContext.SaveChangesAsync();

@@ -3,6 +3,7 @@ using EWallet.Dtos;
 using EWallet.Models;
 using EWallet.Models.Views;
 using EWallet.Repo;
+using Microsoft.EntityFrameworkCore;
 
 namespace EWallet.Service;
 
@@ -153,5 +154,18 @@ public class WalletService
     {
         var currencyModel = await _walletRepo.GetCurrency(appId, currencyId);
         return currencyModel.CurrencyId;
+    }
+    public async Task ClearAll()
+    {
+        await _walletRepo.BeginTransaction();
+        await _walletRepo.DbContext().OrderItems.ExecuteDeleteAsync();
+        await _walletRepo.DbContext().Wallets.ExecuteDeleteAsync();
+        await _walletRepo.DbContext().WalletBalances.ExecuteDeleteAsync();
+        await _walletRepo.DbContext().WalletTransactions.ExecuteDeleteAsync();
+        await _walletRepo.DbContext().Orders.ExecuteDeleteAsync();
+        await _walletRepo.DbContext().Currencies.ExecuteDeleteAsync();
+        await _walletRepo.CommitTransaction();
+        //await _walletRepo.DbContext().Apps.ExecuteDeleteAsync();
+        //await _walletRepo.DbContext().TransactionTypes.ExecuteDeleteAsync();
     }
 }
