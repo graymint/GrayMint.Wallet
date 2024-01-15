@@ -2,20 +2,12 @@
 using EWallet.Dtos;
 using EWallet.Models;
 using EWallet.Repo;
+using Microsoft.EntityFrameworkCore;
 
 namespace EWallet.Service;
 
-public class AppService
+public class AppService(WalletRepo walletRepo, WalletService walletService)
 {
-    private readonly WalletRepo _walletRepo;
-    private readonly WalletService _walletService;
-
-    public AppService(WalletRepo walletRepo, WalletService walletService)
-    {
-        _walletRepo = walletRepo;
-        _walletService = walletService;
-    }
-
     public async Task<App> Create()
     {
         // Create App
@@ -24,32 +16,39 @@ public class AppService
             CreatedTime = DateTime.UtcNow
         };
 
-        await _walletRepo.BeginTransaction();
+        await walletRepo.BeginTransaction();
 
         // Save in db
-        await _walletRepo.AddEntity(app);
-        await _walletRepo.SaveChangesAsync();
+        await walletRepo.AddEntity(app);
+        await walletRepo.SaveChangesAsync();
 
         // create wallet
-        var wallet = await _walletService.Create(app.AppId);
+        var wallet = await walletService.Create(app.AppId);
 
         // update app for system wallet
         app.SystemWalletId = wallet.WalletId;
-        await _walletRepo.SaveChangesAsync();
+        await walletRepo.SaveChangesAsync();
 
-        await _walletRepo.CommitTransaction();
+        await walletRepo.CommitTransaction();
 
         return app.ToDto();
     }
 
     public async Task<App> Get(int appId)
     {
-        var app = await _walletRepo.GetApp(appId);
+        var app = await walletRepo.GetApp(appId);
         return app.ToDto();
     }
 
     public async Task<AppModel> GetModel(int appId)
     {
-        return await _walletRepo.GetApp(appId);
+        return await walletRepo.GetApp(appId);
+    }
+
+    public Task ClearAll(int appId)
+    {
+        return walletRepo.GetDbContext().Apps
+            .Where(x => x.AppId == appId)
+            .ExecuteDeleteAsync();
     }
 }

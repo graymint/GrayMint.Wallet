@@ -9,15 +9,10 @@ public enum TransactionType : byte
     Sale = 2
 }
 
-public class TransactionTypeLookup
+public class TransactionTypeLookup(TransactionType transactionTypeId, string walletTransferTypeName)
 {
-    public TransactionType TransactionTypeId { get; set; }
-    public string WalletTransferTypeName { get; set; }
-    public TransactionTypeLookup(TransactionType transactionTypeId, string walletTransferTypeName)
-    {
-        TransactionTypeId = transactionTypeId;
-        WalletTransferTypeName = walletTransferTypeName;
-    }
+    public TransactionType TransactionTypeId { get; set; } = transactionTypeId;
+    public string WalletTransferTypeName { get; set; } = walletTransferTypeName;
 
     public virtual ICollection<OrderModel>? OrderModels { get; set; }
 }

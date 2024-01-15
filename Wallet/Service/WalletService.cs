@@ -6,16 +6,8 @@ using EWallet.Repo;
 
 namespace EWallet.Service;
 
-public class WalletService
+public class WalletService(WalletRepo walletRepo)
 {
-    private readonly WalletRepo _walletRepo;
-
-    public WalletService(WalletRepo walletRepo)
-    {
-        _walletRepo = walletRepo;
-
-    }
-
     public async Task<Wallet> Create(int appId)
     {
         // Create Wallet
@@ -26,8 +18,8 @@ public class WalletService
         };
 
         // Save to db
-        await _walletRepo.AddEntity(walletModel);
-        await _walletRepo.SaveChangesAsync();
+        await walletRepo.AddEntity(walletModel);
+        await walletRepo.SaveChangesAsync();
 
         var wallet = await Get(appId, walletModel.WalletId);
         return wallet;
@@ -36,7 +28,7 @@ public class WalletService
     public async Task<Wallet> Get(int appId, int walletId)
     {
         // Get wallet from db
-        var wallet = await _walletRepo.GetWallet(appId, walletId);
+        var wallet = await walletRepo.GetWallet(appId, walletId);
 
         return wallet.ToDto();
     }
@@ -49,11 +41,11 @@ public class WalletService
         // get currency to make sure wallet is correct
         await GetCurrency(appId, request.CurrencyId);
 
-        var minWalletCurrency = await _walletRepo.FindWalletCurrency(walletId, request.CurrencyId);
+        var minWalletCurrency = await walletRepo.FindWalletCurrency(walletId, request.CurrencyId);
 
         if (minWalletCurrency == null)
         {
-            await _walletRepo.AddEntity(new WalletBalanceModel
+            await walletRepo.AddEntity(new WalletBalanceModel
             {
                 WalletId = walletId,
                 CurrencyId = request.CurrencyId,
@@ -67,7 +59,7 @@ public class WalletService
             minWalletCurrency.ModifiedTime = DateTime.UtcNow;
         }
 
-        await _walletRepo.SaveChangesAsync();
+        await walletRepo.SaveChangesAsync();
 
         // prepare output
         return await Get(appId, walletId);
@@ -82,7 +74,7 @@ public class WalletService
             await Get(appId, (int)participantWalletId);
 
         // Get orders that contain transaction of participant wallets
-        var orders = await _walletRepo.GetOrderItemsByWalletIds(
+        var orders = await walletRepo.GetOrderItemsByWalletIds(
         appId, walletId, participantWalletId, beginTime, endTime, orderTypeId, pageSize, pageNumber);
 
         return orders;
@@ -120,14 +112,14 @@ public class WalletService
             AppId = appId
         };
 
-        await _walletRepo.BeginTransaction();
+        await walletRepo.BeginTransaction();
 
         // Save to db
-        await _walletRepo.AddEntity(currency);
-        await _walletRepo.SaveChangesAsync();
+        await walletRepo.AddEntity(currency);
+        await walletRepo.SaveChangesAsync();
 
         // set minBalance for system wallet of the app
-        var app = await _walletRepo.GetApp(appId);
+        var app = await walletRepo.GetApp(appId);
         ArgumentNullException.ThrowIfNull(app.SystemWalletId);
         await SetMinBalance(appId, (int)app.SystemWalletId, new SetMinBalanceRequest
         {
@@ -135,7 +127,7 @@ public class WalletService
             MinBalance = -long.MaxValue
         });
 
-        await _walletRepo.CommitTransaction();
+        await walletRepo.CommitTransaction();
 
         return currency.CurrencyId;
     }
@@ -143,15 +135,15 @@ public class WalletService
     public async Task<int[]> GetCurrencies(int appId)
     {
         // Validate app
-        await _walletRepo.GetApp(appId);
+        await walletRepo.GetApp(appId);
 
-        var currencies = await _walletRepo.GetCurrencies(appId);
+        var currencies = await walletRepo.GetCurrencies(appId);
         return currencies.Select(c => c.CurrencyId).ToArray();
     }
 
     public async Task<int> GetCurrency(int appId, int currencyId)
     {
-        var currencyModel = await _walletRepo.GetCurrency(appId, currencyId);
+        var currencyModel = await walletRepo.GetCurrency(appId, currencyId);
         return currencyModel.CurrencyId;
     }
 }
