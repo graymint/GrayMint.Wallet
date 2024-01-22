@@ -160,23 +160,37 @@ public class WalletRepo(WalletDbContext walletDbContext)
             .Where(x => x.Order!.OrderTypeId == orderTypeId || orderTypeId == null)
             .Where(x => x.Order!.CreatedTime >= beginTime)
             .Where(x => x.Order!.CreatedTime < endTime)
-            .Select(x => new OrderItemView
+            .Select(x => new
             {
-                SenderWalletId = x.SenderWalletId,
-                ReceiverWalletId = x.ReceiverWalletId,
+                x.SenderWalletId,
+                x.ReceiverWalletId,
                 Status = OrderStatusConverter.ToDto(x.Order!.VoidedTime, x.Order.CapturedTime),
-                Amount = x.Amount,
-                CurrencyId = x.Order.CurrencyId,
-                OrderId = x.Order.OrderReferenceNumber,
-                OrderItemId = x.OrderItemId,
-                OrderTypeId = x.Order.OrderTypeId,
-                CreatedTime = x.Order.CreatedTime
+                x.Amount,
+                x.Order.CurrencyId,
+                x.Order.OrderReferenceNumber,
+                x.Order.OrderId,
+                x.OrderItemId,
+                x.Order.OrderTypeId,
+                x.Order.CreatedTime
             })
             .OrderByDescending(x => x.OrderId)
             .Skip(skip.Value)
             .Take(pageSize.Value);
 
-        return await query.ToArrayAsync();
+        var result = await query.ToArrayAsync();
+        return [.. result.Select(x => new OrderItemView
+        {
+            Amount = x.Amount,
+            CreatedTime = x.CreatedTime,
+            CurrencyId = x.CurrencyId,
+            OrderId = x.OrderReferenceNumber,
+            OrderItemId = x.OrderItemId,
+            ReceiverWalletId = x.ReceiverWalletId,
+            OrderTypeId = x.OrderTypeId,
+            SenderWalletId = x.SenderWalletId,
+            Status = x.Status
+        })
+        .OrderByDescending(x => x.CreatedTime)];
     }
 
 }

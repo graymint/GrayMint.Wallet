@@ -80,30 +80,6 @@ public class WalletService(WalletRepo walletRepo)
         return orders;
     }
 
-    public OrderStatus GetStatusOfOrder(OrderModel order)
-    {
-        if (order.VoidedTime is not null)
-        {
-            return OrderStatus.Voided;
-        }
-
-        if (
-                (order.AuthorizedTime is null && order.CapturedTime is not null) ||
-                (order.AuthorizedTime is not null && order.CapturedTime is not null)
-            )
-        {
-            return OrderStatus.Captured;
-        }
-
-        if (order.AuthorizedTime is not null &&
-            order.CapturedTime is null)
-        {
-            return OrderStatus.Authorized;
-        }
-
-        throw new Exception("Invalid dates for wallet transfer.");
-    }
-
     public async Task<int> CreateCurrency(int appId)
     {
         // Create currency
