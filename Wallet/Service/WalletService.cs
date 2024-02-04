@@ -124,13 +124,4 @@ public class WalletService(WalletRepo walletRepo)
         return currencyModel.CurrencyId;
     }
 
-    public async Task<OrderItemView[]> GetSettleTransactions(int appId, int walletId, int participantWalletId, DateTime? beginTime, DateTime? endTime, int? pageSize, int? pageNumber)
-    {
-        await Get(appId, walletId);
-        await Get(appId, participantWalletId);
-        var orders = await walletRepo.GetOrderItemsByWalletIds(
-            appId, walletId, participantWalletId, beginTime, endTime, 5, pageSize, pageNumber);
-
-        return orders;
-    }
 }

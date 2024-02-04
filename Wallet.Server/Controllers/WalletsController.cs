@@ -32,14 +32,7 @@ public class WalletsController(WalletService walletService) : ControllerBase
             appId, walletId, participantWalletId, beginTime, endTime, orderTypeId, pageSize, pageNumber);
         return orderItemViews;
     }
-    [HttpGet("settle-transactions")]
-    public async Task<OrderItemView[]> GetSettleTransactions(int appId, int walletId, int participantWalletId ,
-        DateTime? beginTime = null, DateTime? endTime = null,  int? pageSize = null, int? pageNumber = null)
-    {
-        var orderItemViews = await walletService.GetSettleTransactions(
-            appId, walletId, participantWalletId, beginTime, endTime,  pageSize, pageNumber);
-        return orderItemViews;
-    }
+
     [HttpPost("{walletId}/min-balance")]
     public async Task<Wallet> SetMinBalance(int appId, int walletId, SetMinBalanceRequest request)
     {
