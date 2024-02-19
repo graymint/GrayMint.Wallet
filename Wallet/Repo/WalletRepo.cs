@@ -23,6 +23,8 @@ public class WalletRepo(WalletDbContext walletDbContext)
         await walletDbContext.Set<TEntity>().AddRangeAsync(entity);
     }
 
+ 
+
     public async Task SaveChangesAsync()
     {
         await walletDbContext.SaveChangesAsync();
@@ -118,6 +120,11 @@ public class WalletRepo(WalletDbContext walletDbContext)
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
+    public async Task<bool> ExistOrder(int appId, Guid orderId)
+    {
+        return await walletDbContext.Orders
+         .AnyAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
+    }
     public async Task<OrderModel> GetOrderFull(int appId, Guid orderId)
     {
         return await walletDbContext.Orders

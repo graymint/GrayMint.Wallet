@@ -3,6 +3,7 @@ using EWallet.Dtos;
 using EWallet.Models;
 using EWallet.Models.Views;
 using EWallet.Repo;
+using Microsoft.EntityFrameworkCore;
 
 namespace EWallet.Service;
 
@@ -117,9 +118,10 @@ public class WalletService(WalletRepo walletRepo)
         return currencies.Select(c => c.CurrencyId).ToArray();
     }
 
-    public async Task<int> GetCurrency(int appId, int currencyId)
+    private async Task<int> GetCurrency(int appId, int currencyId)
     {
         var currencyModel = await walletRepo.GetCurrency(appId, currencyId);
         return currencyModel.CurrencyId;
     }
+
 }

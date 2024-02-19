@@ -1362,4 +1362,25 @@ public class OrderTest : BaseControllerTest
         Assert.AreEqual(10, wallet5AvailableBalance);
         Assert.AreEqual(20, wallet6AvailableBalance);
     }
+
+    [TestMethod]
+    public async Task Fail_create_an_order_with_Wallet_Idempotent_Exception()
+    {
+        // create wallet1
+        var walletDom = await WalletDom.Create(TestInit1);
+
+        // create a authorize order
+        var orderId = Guid.NewGuid();
+        await walletDom.CreateOrder(TestInit1, orderId: orderId );
+
+        try
+        {
+            await walletDom.CreateOrder(TestInit1, orderId: orderId);
+            Assert.Fail("WalletIdempotent  exception is expected.");
+        }
+        catch (ApiException ex)
+        {
+            Assert.AreEqual(nameof(WalletIdempotentException), ex.ExceptionTypeName);
+        }
+    }
 }
