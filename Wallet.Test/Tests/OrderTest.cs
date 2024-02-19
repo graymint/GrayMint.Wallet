@@ -1364,7 +1364,7 @@ public class OrderTest : BaseControllerTest
     }
 
     [TestMethod]
-    public async Task Fail_create_an_order_with_Wallet_Idempotent_Exception()
+    public async Task Create_an_order_with_Wallet_Idempotent_Exception()
     {
         // create wallet1
         var systemWalletDom = await WalletDom.Create(TestInit1);
