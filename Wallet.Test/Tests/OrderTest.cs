@@ -709,7 +709,7 @@ public class OrderTest : BaseControllerTest
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom3.Wallet.WalletId, amount: 90, transactionType: TransactionType.Authorize);
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom4.Wallet.WalletId, amount: 10, transactionType: TransactionType.Authorize);
 
-        var  orderTypeId = new Random().Next(int.MinValue, int.MaxValue);
+        var orderTypeId = new Random().Next(int.MinValue, int.MaxValue);
         // Create order request
         var request = new CreateOrderRequest
         {
@@ -1265,7 +1265,7 @@ public class OrderTest : BaseControllerTest
         var walletDom4 = await WalletDom.Create(TestInit1);
         var walletDom5 = await WalletDom.Create(TestInit1);
         var walletDom6 = await WalletDom.Create(TestInit1);
-         
+
         // Transfer to wallets in order to make available balances based on document
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom1.Wallet.WalletId, amount: 100, transactionType: TransactionType.Sale);
         await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom2.Wallet.WalletId, amount: 150, transactionType: TransactionType.Sale);
@@ -1367,20 +1367,40 @@ public class OrderTest : BaseControllerTest
     public async Task Fail_create_an_order_with_Wallet_Idempotent_Exception()
     {
         // create wallet1
-        var walletDom = await WalletDom.Create(TestInit1);
+        var systemWalletDom = await WalletDom.Create(TestInit1);
+        var walletDom1 = await WalletDom.Create(TestInit1);
+        await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom1.Wallet.WalletId, amount: 1000, transactionType: TransactionType.Sale);
 
-        // create a authorize order
-        var orderId = Guid.NewGuid();
-        await walletDom.CreateOrder(TestInit1, orderId: orderId );
+        var walletDom2 = await WalletDom.Create(TestInit1);
+        var walletDom3 = await WalletDom.Create(TestInit1);
 
-        try
+        // Create order request
+        var orderTypeId = new Random().Next(int.MinValue, int.MaxValue);
+        var request = new CreateOrderRequest
         {
-            await walletDom.CreateOrder(TestInit1, orderId: orderId);
-            Assert.Fail("WalletIdempotent  exception is expected.");
-        }
-        catch (ApiException ex)
-        {
-            Assert.AreEqual(nameof(WalletIdempotentException), ex.ExceptionTypeName);
-        }
+            OrderId = Guid.NewGuid(),
+            CurrencyId = systemWalletDom.CurrencyId,
+            OrderTypeId = orderTypeId,
+            TransactionType = TransactionType.Authorize,
+            ParticipantWallets = new List<ParticipantTransferItem>
+            {
+                new ()
+                {
+                    SenderWalletId = walletDom1.Wallet.WalletId,
+                    ReceiverWalletId = walletDom2.Wallet.WalletId,
+                    Amount = 100
+                },
+                new ()
+                {
+                    SenderWalletId = walletDom2.Wallet.WalletId,
+                    ReceiverWalletId = walletDom3.Wallet.WalletId,
+                    Amount = 100
+                }
+            }
+        };
+        var order = await TestInit1.OrdersClient.CreateOrderAsync(TestInit1.AppId, request);
+
+        var idempotentOrder = await TestInit1.OrdersClient.CreateOrderAsync(TestInit1.AppId, request);
+        Assert.AreEqual(order.OrderId,idempotentOrder.OrderId);
     }
 }

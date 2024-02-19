@@ -23,8 +23,6 @@ public class WalletRepo(WalletDbContext walletDbContext)
         await walletDbContext.Set<TEntity>().AddRangeAsync(entity);
     }
 
- 
-
     public async Task SaveChangesAsync()
     {
         await walletDbContext.SaveChangesAsync();
@@ -106,13 +104,6 @@ public class WalletRepo(WalletDbContext walletDbContext)
             .SingleOrDefaultAsync(x => x.CurrencyId == currencyId && x.WalletId == walletId);
     }
 
-    public async Task<WalletBalanceModel?> GetWalletBalance(int appId, int walletId, int currencyId)
-    {
-        return await walletDbContext.WalletBalances
-            .SingleOrDefaultAsync(
-            b => b.WalletId == walletId && b.Wallet!.AppId == appId && b.CurrencyId == currencyId);
-    }
-
     public async Task<OrderModel> GetOrder(int appId, Guid orderId)
     {
         return await walletDbContext.Orders
@@ -120,11 +111,13 @@ public class WalletRepo(WalletDbContext walletDbContext)
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
-    public async Task<bool> ExistOrder(int appId, Guid orderId)
+    public async Task<OrderModel?> FindOrder(int appId, Guid orderId)
     {
         return await walletDbContext.Orders
-         .AnyAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
+                .Include(x => x.OrderItems)
+         .SingleOrDefaultAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
+
     public async Task<OrderModel> GetOrderFull(int appId, Guid orderId)
     {
         return await walletDbContext.Orders
@@ -199,5 +192,4 @@ public class WalletRepo(WalletDbContext walletDbContext)
         })
         .OrderByDescending(x => x.CreatedTime)];
     }
-
 }

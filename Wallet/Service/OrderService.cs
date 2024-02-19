@@ -13,6 +13,11 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
 
     public async Task<Order> Create(int appId, CreateOrderRequest request)
     {
+
+        var idempotentOrder = await ValidateOrderIdempotent(appId, request);
+        if (idempotentOrder is not null)
+            return idempotentOrder.ToDto();
+
         // create order
         var order = await CreateOrder(appId, request);
 
@@ -265,7 +270,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
 
         // Validate order request
         await ValidateCreateOrderRequest(appId, request, wallets);
-
+        
         await walletRepo.BeginTransaction();
 
         // create order
@@ -312,9 +317,6 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         if (request.TransactionType != TransactionType.Authorize && request.TransactionType != TransactionType.Sale)
             throw new InvalidOperationException($"{request.TransactionType} does not accepted.");
 
-        if( await walletRepo.ExistOrder(appId, request.OrderId))
-            throw new WalletIdempotentException($"order already exist");
-
         // Validate currency
         await walletRepo.GetCurrency(appId, request.CurrencyId);
 
@@ -350,6 +352,55 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
             .ToList();
         if (duplicateItems.Count > 0)
             throw new InvalidOperationException("duplicate records.");
+    }
+
+    private async Task<OrderModel?> ValidateOrderIdempotent(int appId, CreateOrderRequest request)
+    {
+        var order = await walletRepo.FindOrder(appId, request.OrderId);
+        if (order is null)
+            return null;
+
+        ArgumentNullException.ThrowIfNull(order.OrderItems);
+
+        var requestParticipants = request.ParticipantWallets
+            .Select(x => new object[] { x.SenderWalletId, x.ReceiverWalletId })
+            .ToArray();
+        var requestParticipantsArray = requestParticipants
+            .Select(x => x.Select(Convert.ToInt32).ToArray())
+            .ToArray();
+
+        var orderParticipants = order.OrderItems
+            .Select(x => new object[] { x.SenderWalletId, x.ReceiverWalletId }).ToArray();
+        var orderParticipantsArray = orderParticipants
+            .Select(x => x.Select(Convert.ToInt32).ToArray())
+            .ToArray();
+
+        if (order.CurrencyId == request.CurrencyId &&
+               order.OrderTypeId == request.OrderTypeId &&
+               order.TransactionType == request.TransactionType &&
+               AreArraysSame(requestParticipantsArray, orderParticipantsArray))
+            return order;
+        return null;
+    }
+
+    private static bool AreArraysSame(IReadOnlyList<int[]> array1, IReadOnlyList<int[]> array2)
+    {
+        if (array1.Count != array2.Count)
+        {
+            return false;
+        }
+
+        return !array1.Where((t, i) => !InnerArraysAreEqual(t, array2[i])).Any();
+    }
+
+    private static bool InnerArraysAreEqual(IReadOnlyList<int> arr1, IReadOnlyList<int> arr2)
+    {
+        if (arr1.Count != arr2.Count)
+        {
+            return false;
+        }
+
+        return !arr1.Where((t, i) => t != arr2[i]).Any();
     }
 
     public async Task<Order> Capture(int appId, Guid orderId)
