@@ -13,6 +13,8 @@ public class OrdersController(OrderService orderService) : ControllerBase
     [HttpPost]
     public async Task<Order> CreateOrder(int appId, CreateOrderRequest request)
     {
+        using var orderLock = await WalletLock.LockOrder(request.OrderId.ToString());
+
         var order = await orderService.Create(appId, request);
         return order;
     }
@@ -27,6 +29,7 @@ public class OrdersController(OrderService orderService) : ControllerBase
     [HttpPost("{orderId:guid}/capture")]
     public async Task<Order> Capture(int appId, Guid orderId)
     {
+        using var orderLock = await WalletLock.LockOrder(orderId.ToString());
         var order = await orderService.Capture(appId, orderId);
         return order;
     }
@@ -34,6 +37,7 @@ public class OrdersController(OrderService orderService) : ControllerBase
     [HttpPost("{orderId:guid}/void")]
     public async Task<Order> Void(int appId, Guid orderId)
     {
+        using var orderLock = await WalletLock.LockOrder(orderId.ToString());
          var order = await orderService.Void(appId, orderId);
          return order;
     }

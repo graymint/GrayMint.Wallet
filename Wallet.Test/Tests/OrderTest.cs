@@ -306,7 +306,7 @@ public class OrderTest : BaseControllerTest
         }
         catch (ApiException ex)
         {
-            Assert.AreEqual(nameof(InvalidTransactionTypeException), ex.ExceptionTypeName);
+            Assert.AreEqual(nameof(OrderAlreadySetAsRequestedStateException), ex.ExceptionTypeName);
         }
     }
 
@@ -351,7 +351,7 @@ public class OrderTest : BaseControllerTest
         }
         catch (ApiException ex)
         {
-            Assert.AreEqual(nameof(InvalidTransactionTypeException), ex.ExceptionTypeName);
+            Assert.AreEqual(nameof(OrderAlreadySetAsRequestedStateException), ex.ExceptionTypeName);
         }
     }
 
@@ -375,7 +375,7 @@ public class OrderTest : BaseControllerTest
         }
         catch (ApiException ex)
         {
-            Assert.AreEqual(nameof(InvalidTransactionTypeException), ex.ExceptionTypeName);
+            Assert.AreEqual(nameof(OrderAlreadySetAsRequestedStateException), ex.ExceptionTypeName);
         }
     }
 
@@ -634,9 +634,7 @@ public class OrderTest : BaseControllerTest
 
         // void the order
         await walletDom.Void(TestInit1, orderId);
-        throw new NotImplementedException();
     }
-
 
     [TestMethod]
     public async Task Void_sale_without_balance()
@@ -1401,6 +1399,6 @@ public class OrderTest : BaseControllerTest
         var order = await TestInit1.OrdersClient.CreateOrderAsync(TestInit1.AppId, request);
 
         var idempotentOrder = await TestInit1.OrdersClient.CreateOrderAsync(TestInit1.AppId, request);
-        Assert.AreEqual(order.OrderId,idempotentOrder.OrderId);
+        Assert.AreEqual(order.OrderId, idempotentOrder.OrderId);
     }
 }

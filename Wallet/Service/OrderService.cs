@@ -420,6 +420,9 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         ArgumentNullException.ThrowIfNull(order.OrderItems);
         var orderStatus = order.ToDto().Status;
 
+        if (orderStatus == OrderStatus.Captured)
+            throw new OrderAlreadySetAsRequestedStateException("State is already captured.");
+
         if (orderStatus != OrderStatus.Authorized)
             throw new InvalidTransactionTypeException("Capture process works only on authorize status.");
 
@@ -447,8 +450,6 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         }
         await Transfers(order.App, order.CurrencyId, walletTransferItems);
 
-        // todo new wallet balance records 
-
         // update order
         order.ModifiedTime = DateTime.UtcNow;
         order.CapturedTime = DateTime.UtcNow;
@@ -467,6 +468,9 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         ArgumentNullException.ThrowIfNull(order.App.SystemWalletId);
         ArgumentNullException.ThrowIfNull(order.OrderItems);
         var orderStatus = order.ToDto().Status;
+
+        if (orderStatus == OrderStatus.Voided)
+            throw new OrderAlreadySetAsRequestedStateException("State is already voided.");
 
         if (order.VoidedTime is not null)
             throw new InvalidTransactionTypeException("Order is already Voided.");
