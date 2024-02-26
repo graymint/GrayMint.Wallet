@@ -412,7 +412,6 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
 
     public async Task<Order> Capture(int appId, Guid orderId)
     {
-        // todo: lock application
         // get order info
         var order = await GetOrderFull(appId, orderId);
         ArgumentNullException.ThrowIfNull(order.App);

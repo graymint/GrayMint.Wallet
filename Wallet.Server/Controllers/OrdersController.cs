@@ -1,6 +1,7 @@
 ﻿using Asp.Versioning;
 using EWallet.Dtos;
 using EWallet.Service;
+using GrayMint.Common.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EWallet.Server.Controllers;
@@ -11,10 +12,11 @@ namespace EWallet.Server.Controllers;
 public class OrdersController(OrderService orderService) : ControllerBase
 {
     [HttpPost]
-    public async Task<Order> CreateOrder(int appId, CreateOrderRequest request)
+    public async Task<Order> CreateOrder(int appId, CreateOrderRequest request, CancellationToken cancellationToken)
     {
-        using var orderLock = await WalletLock.LockOrder(request.OrderId.ToString());
+        using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
 
+        // create order
         var order = await orderService.Create(appId, request);
         return order;
     }
@@ -22,23 +24,26 @@ public class OrdersController(OrderService orderService) : ControllerBase
     [HttpGet("{orderId:guid}")]
     public async Task<Order> GetOrder(int appId, Guid orderId)
     {
-         var order = await orderService.GetOrder(appId, orderId);
-         return order;
+        var order = await orderService.GetOrder(appId, orderId);
+        return order;
     }
 
     [HttpPost("{orderId:guid}/capture")]
-    public async Task<Order> Capture(int appId, Guid orderId)
+    public async Task<Order> Capture(int appId, Guid orderId, CancellationToken cancellationToken)
     {
-        using var orderLock = await WalletLock.LockOrder(orderId.ToString());
+        using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
+
+        // capture
         var order = await orderService.Capture(appId, orderId);
         return order;
     }
 
     [HttpPost("{orderId:guid}/void")]
-    public async Task<Order> Void(int appId, Guid orderId)
+    public async Task<Order> Void(int appId, Guid orderId, CancellationToken cancellationToken)
     {
-        using var orderLock = await WalletLock.LockOrder(orderId.ToString());
-         var order = await orderService.Void(appId, orderId);
-         return order;
+        using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
+
+        var order = await orderService.Void(appId, orderId);
+        return order;
     }
 }
