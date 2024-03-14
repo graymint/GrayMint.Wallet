@@ -72,15 +72,15 @@ public class WalletDom
             CurrencyId = (int)currencyId,
             OrderId = (Guid)orderId,
             TransactionType = transactionType,
-            ParticipantWallets = new List<ParticipantTransferItem>
-            {
-                new()
+            ParticipantWallets =
+            [
+                new ParticipantTransferItem
                 {
                     SenderWalletId = (int)senderWalletId,
                     ReceiverWalletId = (int)receiverWalletId,
                     Amount =  (decimal)amount
                 }
-            }
+            ]
         };
         var orderCreated = await testInit.OrdersClient.CreateOrderAsync(testInit.AppId, request);
         var order = await testInit.OrdersClient.GetOrderAsync(testInit.AppId, orderCreated.OrderId);

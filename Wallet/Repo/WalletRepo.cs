@@ -23,8 +23,6 @@ public class WalletRepo(WalletDbContext walletDbContext)
         await walletDbContext.Set<TEntity>().AddRangeAsync(entity);
     }
 
- 
-
     public async Task SaveChangesAsync()
     {
         await walletDbContext.SaveChangesAsync();
@@ -106,13 +104,6 @@ public class WalletRepo(WalletDbContext walletDbContext)
             .SingleOrDefaultAsync(x => x.CurrencyId == currencyId && x.WalletId == walletId);
     }
 
-    public async Task<WalletBalanceModel?> GetWalletBalance(int appId, int walletId, int currencyId)
-    {
-        return await walletDbContext.WalletBalances
-            .SingleOrDefaultAsync(
-            b => b.WalletId == walletId && b.Wallet!.AppId == appId && b.CurrencyId == currencyId);
-    }
-
     public async Task<OrderModel> GetOrder(int appId, Guid orderId)
     {
         return await walletDbContext.Orders
@@ -120,11 +111,13 @@ public class WalletRepo(WalletDbContext walletDbContext)
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
-    public async Task<bool> ExistOrder(int appId, Guid orderId)
+    public async Task<OrderModel?> FindOrder(int appId, Guid orderId)
     {
         return await walletDbContext.Orders
-         .AnyAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
+                .Include(x => x.OrderItems)
+         .SingleOrDefaultAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
+
     public async Task<OrderModel> GetOrderFull(int appId, Guid orderId)
     {
         return await walletDbContext.Orders
@@ -167,23 +160,36 @@ public class WalletRepo(WalletDbContext walletDbContext)
             .Where(x => x.Order!.OrderTypeId == orderTypeId || orderTypeId == null)
             .Where(x => x.Order!.CreatedTime >= beginTime)
             .Where(x => x.Order!.CreatedTime < endTime)
-            .Select(x => new OrderItemView
+            .Select(x => new
             {
-                SenderWalletId = x.SenderWalletId,
-                ReceiverWalletId = x.ReceiverWalletId,
+                x.SenderWalletId,
+                x.ReceiverWalletId,
                 Status = OrderStatusConverter.ToDto(x.Order!.VoidedTime, x.Order.CapturedTime),
-                Amount = x.Amount,
-                CurrencyId = x.Order.CurrencyId,
-                OrderId = x.Order.OrderReferenceNumber,
-                OrderItemId = x.OrderItemId,
-                OrderTypeId = x.Order.OrderTypeId,
-                CreatedTime = x.Order.CreatedTime
+                x.Amount,
+                x.Order.CurrencyId,
+                x.Order.OrderReferenceNumber,
+                x.Order.OrderId,
+                x.OrderItemId,
+                x.Order.OrderTypeId,
+                x.Order.CreatedTime
             })
             .OrderByDescending(x => x.OrderId)
             .Skip(skip.Value)
             .Take(pageSize.Value);
 
-        return await query.ToArrayAsync();
+        var result = await query.ToArrayAsync();
+        return [.. result.Select(x => new OrderItemView
+        {
+            Amount = x.Amount,
+            CreatedTime = x.CreatedTime,
+            CurrencyId = x.CurrencyId,
+            OrderId = x.OrderReferenceNumber,
+            OrderItemId = x.OrderItemId,
+            ReceiverWalletId = x.ReceiverWalletId,
+            OrderTypeId = x.OrderTypeId,
+            SenderWalletId = x.SenderWalletId,
+            Status = x.Status
+        })
+        .OrderByDescending(x => x.CreatedTime)];
     }
-
 }

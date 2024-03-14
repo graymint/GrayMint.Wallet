@@ -13,7 +13,9 @@ public class AppService(WalletRepo walletRepo, WalletService walletService)
         // Create App
         var app = new AppModel
         {
-            CreatedTime = DateTime.UtcNow
+            CreatedTime = DateTime.UtcNow,
+            AppId = 0,
+            SystemWalletId = null
         };
 
         await walletRepo.BeginTransaction();

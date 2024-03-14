@@ -3,7 +3,6 @@ using EWallet.Dtos;
 using EWallet.Models;
 using EWallet.Models.Views;
 using EWallet.Repo;
-using Microsoft.EntityFrameworkCore;
 
 namespace EWallet.Service;
 
@@ -79,30 +78,6 @@ public class WalletService(WalletRepo walletRepo)
         appId, walletId, participantWalletId, beginTime, endTime, orderTypeId, pageSize, pageNumber);
 
         return orders;
-    }
-
-    public OrderStatus GetStatusOfOrder(OrderModel order)
-    {
-        if (order.VoidedTime is not null)
-        {
-            return OrderStatus.Voided;
-        }
-
-        if (
-                (order.AuthorizedTime is null && order.CapturedTime is not null) ||
-                (order.AuthorizedTime is not null && order.CapturedTime is not null)
-            )
-        {
-            return OrderStatus.Captured;
-        }
-
-        if (order.AuthorizedTime is not null &&
-            order.CapturedTime is null)
-        {
-            return OrderStatus.Authorized;
-        }
-
-        throw new Exception("Invalid dates for wallet transfer.");
     }
 
     public async Task<int> CreateCurrency(int appId)
