@@ -14,7 +14,7 @@ public class OrdersController(OrderService orderService) : ControllerBase
     [HttpPost]
     public async Task<Order> CreateOrder(int appId, CreateOrderRequest request, CancellationToken cancellationToken)
     {
-        //using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
+        using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
 
         // create order
         var order = await orderService.Create(appId, request);
