@@ -19,7 +19,7 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
         {
             logger.LogWarning("CreateOrder.Start lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
 
-            using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
+           // using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
 
             logger.LogWarning("CreateOrder.Finish lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
 
@@ -48,7 +48,7 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
         try
         {
             logger.LogWarning("Capture.Start lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
-            using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
+            //using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
             logger.LogWarning("Capture.Finish lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
 
             // capture
