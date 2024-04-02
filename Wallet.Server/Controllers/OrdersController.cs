@@ -1,4 +1,5 @@
 ﻿using Asp.Versioning;
+using Azure.Core;
 using EWallet.Dtos;
 using EWallet.Service;
 using GrayMint.Common.Utils;
@@ -16,11 +17,11 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
     {
         try
         {
-            logger.LogWarning("Start lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
-            
+            logger.LogWarning("CreateOrder.Start lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
+
             using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
 
-            logger.LogWarning("Finish lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
+            logger.LogWarning("CreateOrder.Finish lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
 
 
             // create order
@@ -29,8 +30,7 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
         }
         catch (Exception e)
         {
-            logger.LogWarning("Catch lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
-            Console.WriteLine(e);
+            logger.LogWarning(e, "CreateOrder.Catch lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
             throw;
         }
     }
@@ -45,11 +45,24 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
     [HttpPost("{orderId:guid}/capture")]
     public async Task<Order> Capture(int appId, Guid orderId, CancellationToken cancellationToken)
     {
-        using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
+        try
+        {
+            logger.LogWarning("Capture.Start lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
+            using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
+            logger.LogWarning("Capture.Start lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
 
-        // capture
-        var order = await orderService.Capture(appId, orderId);
-        return order;
+            // capture
+            var order = await orderService.Capture(appId, orderId);
+            return order;
+
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Capture.Start lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
+
+            throw;
+        }
+
     }
 
     [HttpPost("{orderId:guid}/void")]
