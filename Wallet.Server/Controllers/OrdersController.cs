@@ -18,7 +18,7 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
         {
             logger.LogWarning("Start lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
             
-            using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10));
+            using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
 
             logger.LogWarning("Finish lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
 
