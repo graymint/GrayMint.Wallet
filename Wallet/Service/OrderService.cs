@@ -153,7 +153,8 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     }
 
     private List<int> GetWalletIds(ICollection<WalletTransferItem> items)
-    {       // get list senders
+    {
+        // get list senders
         var list = items.Select(x => x.ParticipantTransferItem.SenderWalletId)
             .Distinct()
             .ToList();
@@ -257,7 +258,8 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
 
                     throw new ArgumentOutOfRangeException(nameof(amount), amount, "Balance can not calculate.");
                 }
-            // update cache
+
+            // calc new balance
             case > 0 when walletBalance is null:
                 newBalance = amount;
 
