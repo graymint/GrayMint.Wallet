@@ -49,7 +49,7 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
         {
             logger.LogWarning("Capture.Start lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
             using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
-            logger.LogWarning("Capture.Start lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
+            logger.LogWarning("Capture.Finish lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
 
             // capture
             var order = await orderService.Capture(appId, orderId);
@@ -58,7 +58,7 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
         }
         catch (Exception e)
         {
-            logger.LogWarning(e, "Capture.Start lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
+            logger.LogWarning(e, "Capture.Catch lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
 
             throw;
         }
