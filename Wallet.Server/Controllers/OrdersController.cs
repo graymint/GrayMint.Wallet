@@ -9,16 +9,30 @@ namespace EWallet.Server.Controllers;
 [ApiController]
 [ApiVersion("1")]
 [Route("api/v{version:apiVersion}/apps/{appId}/orders")]
-public class OrdersController(OrderService orderService) : ControllerBase
+public class OrdersController(OrderService orderService, ILogger<OrdersController> logger) : ControllerBase
 {
     [HttpPost]
     public async Task<Order> CreateOrder(int appId, CreateOrderRequest request, CancellationToken cancellationToken)
     {
-        using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10));
+        try
+        {
+            logger.LogWarning("Start lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
+            
+            using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10));
 
-        // create order
-        var order = await orderService.Create(appId, request);
-        return order;
+            logger.LogWarning("Finish lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
+
+
+            // create order
+            var order = await orderService.Create(appId, request);
+            return order;
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning("Catch lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
+            Console.WriteLine(e);
+            throw;
+        }
     }
 
     [HttpGet("{orderId:guid}")]
