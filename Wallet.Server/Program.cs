@@ -1,7 +1,9 @@
 using EWallet.Models;
 using EWallet.Persistence;
 using EWallet.Repo;
+using EWallet.Server.Security;
 using EWallet.Service;
+using GrayMint.Authorization.MicroserviceAuthorization;
 using GrayMint.Common.AspNetCore;
 using GrayMint.Common.EntityFrameworkCore;
 using GrayMint.Common.Swagger;
@@ -24,6 +26,10 @@ public class Program
         builder.Services.AddHttpClient();
         builder.Services.AddGrayMintSwagger(title: "wallet", true);
 
+        // GrayMint Authentication
+        builder.AddGrayMintCommonAuthorizationForMicroservice<AuthorizationProvider>();
+
+        builder.Services.Configure<AppOptions>(builder.Configuration.GetSection("App"));
         var webApp = builder.Build();
         webApp.UseGrayMintCommonServices(new UseServicesOptions());
         webApp.UseGrayMintSwagger();
@@ -35,6 +41,7 @@ public class Program
             var appDbContext = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
             await EfCoreUtil.UpdateEnums<TransactionTypeLookup, TransactionType>(appDbContext.TransactionTypes);
             await appDbContext.SaveChangesAsync();
+            await webApp.UseGrayMinCommonAuthorizationForMicroservice();
         }
 
         await GrayMintApp.RunAsync(webApp, args);

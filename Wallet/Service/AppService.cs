@@ -80,4 +80,18 @@ public class AppService(WalletRepo walletRepo, WalletService walletService)
 
         await walletRepo.GetDbContext().Database.CommitTransactionAsync();
     }
+
+    public async Task<string?> GetAuthorizationCode(int appId)
+    {
+        var app = await walletRepo.GetApp(appId);
+        return app.AuthorizationCode;
+    }
+
+    public async Task UpdateAuthorizationCode(int appId, string authorizationCode)
+    {
+        // get max token id
+        var app = await walletRepo.GetApp(appId);
+        app.AuthorizationCode = authorizationCode;
+        await walletRepo.SaveChangesAsync();
+    }
 }

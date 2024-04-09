@@ -1,9 +1,12 @@
 ﻿using Asp.Versioning;
+using EWallet.Server.Security;
 using EWallet.Service;
+using GrayMint.Authorization.PermissionAuthorizations;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EWallet.Server.Controllers;
 
+[AuthorizeAppIdPermission(Permissions.AppReadWrite)]
 [ApiController]
 [ApiVersion("1")]
 [Route("api/v{version:apiVersion}/apps/{appId}/currencies")]
