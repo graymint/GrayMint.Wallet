@@ -42,9 +42,9 @@ public class AppService(WalletRepo walletRepo, WalletService walletService)
         return app.ToDto();
     }
 
-    public async Task<AppModel> GetModel(int appId)
+    public Task<AppModel> GetModel(int appId)
     {
-        return await walletRepo.GetApp(appId);
+        return walletRepo.GetApp(appId);
     }
 
     public async Task ClearAll(int appId)

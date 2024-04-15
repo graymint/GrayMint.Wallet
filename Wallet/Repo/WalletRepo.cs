@@ -18,9 +18,9 @@ public class WalletRepo(WalletDbContext walletDbContext)
         return walletDbContext;
     }
 
-    public async Task AddEntities<TEntity>(TEntity[] entity) where TEntity : class
+    public Task AddEntities<TEntity>(TEntity[] entity) where TEntity : class
     {
-        await walletDbContext.Set<TEntity>().AddRangeAsync(entity);
+        return walletDbContext.Set<TEntity>().AddRangeAsync(entity);
     }
 
     public async Task SaveChangesAsync()
@@ -33,34 +33,34 @@ public class WalletRepo(WalletDbContext walletDbContext)
         await walletDbContext.Database.BeginTransactionAsync();
     }
 
-    public async Task CommitTransaction()
+    public Task CommitTransaction()
     {
-        await walletDbContext.Database.CommitTransactionAsync();
+        return walletDbContext.Database.CommitTransactionAsync();
     }
 
-    public async Task<AppModel> GetApp(int appId)
+    public Task<AppModel> GetApp(int appId)
     {
-        return await walletDbContext.Apps
+        return walletDbContext.Apps
             .SingleAsync(a => a.AppId == appId);
     }
 
-    public async Task<CurrencyModel[]> GetCurrencies(int appId)
+    public Task<CurrencyModel[]> GetCurrencies(int appId)
     {
-        return await walletDbContext.Currencies
-                     .Where(c => c.AppId == appId)
-                     .ToArrayAsync();
+        return walletDbContext.Currencies
+            .Where(c => c.AppId == appId)
+            .ToArrayAsync();
     }
 
-    public async Task<CurrencyModel> GetCurrency(int appId, int currencyId)
+    public Task<CurrencyModel> GetCurrency(int appId, int currencyId)
     {
-        return await walletDbContext.Currencies
+        return walletDbContext.Currencies
             .Where(c => c.AppId == appId && c.CurrencyId == currencyId)
             .SingleAsync();
     }
 
-    public async Task<WalletModel> GetWallet(int appId, int walletId)
+    public Task<WalletModel> GetWallet(int appId, int walletId)
     {
-        return await walletDbContext.Wallets
+        return walletDbContext.Wallets
             .Include(w => w.WalletBalances)
             .SingleAsync(w => w.AppId == appId && w.WalletId == walletId);
     }
@@ -73,54 +73,54 @@ public class WalletRepo(WalletDbContext walletDbContext)
             .FirstOrDefaultAsync();
     }
 
-    public async Task<WalletModel[]> GetWallets(int appId, List<int> walletIds)
+    public Task<WalletModel[]> GetWallets(int appId, List<int> walletIds)
     {
-        return await walletDbContext.Wallets
+        return walletDbContext.Wallets
             .Include(w => w.WalletBalances)
             .Where(w => w.AppId == appId && walletIds.ToArray().Any(walletId => w.WalletId == walletId))
             .ToArrayAsync();
     }
 
-    public async Task<List<WalletBalanceModel>> GetWalletBalances(int appId, int currencyId, List<int> walletIds)
+    public Task<List<WalletBalanceModel>> GetWalletBalances(int appId, int currencyId, List<int> walletIds)
     {
-        return await walletDbContext.WalletBalances
+        return walletDbContext.WalletBalances
             .Include(w => w.Wallet)
             .Where(w => w.Wallet!.AppId == appId && w.CurrencyId == currencyId && walletIds.ToArray().Any(walletId => w.WalletId == walletId))
             .ToListAsync();
     }
 
-    public async Task<List<WalletBalanceModel>> GetWalletBalancesWithoutTrack(int appId, int currencyId, List<int> walletIds)
+    public Task<List<WalletBalanceModel>> GetWalletBalancesWithoutTrack(int appId, int currencyId, List<int> walletIds)
     {
-        return await walletDbContext.WalletBalances
+        return walletDbContext.WalletBalances
             .Include(w => w.Wallet)
             .Where(w => w.Wallet!.AppId == appId && w.CurrencyId == currencyId && walletIds.ToArray().Any(walletId => w.WalletId == walletId))
             .AsNoTracking()
             .ToListAsync();
     }
 
-    public async Task<WalletBalanceModel?> FindWalletCurrency(int walletId, int currencyId)
+    public Task<WalletBalanceModel?> FindWalletCurrency(int walletId, int currencyId)
     {
-        return await walletDbContext.WalletBalances
+        return walletDbContext.WalletBalances
             .SingleOrDefaultAsync(x => x.CurrencyId == currencyId && x.WalletId == walletId);
     }
 
-    public async Task<OrderModel> GetOrder(int appId, Guid orderId)
+    public Task<OrderModel> GetOrder(int appId, Guid orderId)
     {
-        return await walletDbContext.Orders
+        return walletDbContext.Orders
             .Include(o => o.OrderItems)
             .SingleAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
-    public async Task<OrderModel?> FindOrder(int appId, Guid orderId)
+    public Task<OrderModel?> FindOrder(int appId, Guid orderId)
     {
-        return await walletDbContext.Orders
-                .Include(x => x.OrderItems)
-         .SingleOrDefaultAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
+        return walletDbContext.Orders
+            .Include(x => x.OrderItems)
+            .SingleOrDefaultAsync(o => o.AppId == appId && o.OrderReferenceNumber == orderId);
     }
 
-    public async Task<OrderModel> GetOrderFull(int appId, Guid orderId)
+    public Task<OrderModel> GetOrderFull(int appId, Guid orderId)
     {
-        return await walletDbContext.Orders
+        return walletDbContext.Orders
             .Include(x => x.App)
             .Include(o => o.OrderItems)!
             .ThenInclude(x => x.OrderTransactions)

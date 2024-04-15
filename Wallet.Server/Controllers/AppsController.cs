@@ -23,9 +23,9 @@ public class AppsController(AppService appService,
     }
 
     [HttpGet]
-    public async Task<App> Get(int appId)
+    public Task<App> Get(int appId)
     {
-        return await appService.Get(appId);
+        return appService.Get(appId);
     }
 
     [ProducesResponseType(StatusCodes.Status204NoContent)]

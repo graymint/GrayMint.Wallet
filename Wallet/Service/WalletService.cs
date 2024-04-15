@@ -117,9 +117,8 @@ public class WalletService(WalletRepo walletRepo)
         return currencies.Select(c => c.CurrencyId).ToArray();
     }
 
-    private async Task<int> GetCurrency(int appId, int currencyId)
+    private Task GetCurrency(int appId, int currencyId)
     {
-        var currencyModel = await walletRepo.GetCurrency(appId, currencyId);
-        return currencyModel.CurrencyId;
+        return walletRepo.GetCurrency(appId, currencyId);
     }
 }

@@ -20,8 +20,8 @@ public class CurrenciesController(WalletService walletService) : ControllerBase
     }
 
     [HttpGet]
-    public async Task<int[]> GetCurrencies(int appId)
+    public Task<int[]> GetCurrencies(int appId)
     {
-        return await walletService.GetCurrencies(appId);
+        return walletService.GetCurrencies(appId);
     }
 }

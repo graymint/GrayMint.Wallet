@@ -22,9 +22,9 @@ public class WalletsController(WalletService walletService) : ControllerBase
     }
 
     [HttpGet("{walletId:int}")]
-    public async Task<Wallet> GetWallet(int appId, int walletId)
+    public Task<Wallet> GetWallet(int appId, int walletId)
     {
-        return await walletService.Get(appId, walletId);
+        return walletService.Get(appId, walletId);
     }
 
     [HttpGet("transactions")]
