@@ -11,7 +11,7 @@ namespace EWallet.Server.Controllers;
 [AuthorizeAppIdPermission(Permissions.AppReadWrite)]
 [ApiController]
 [ApiVersion("1")]
-[Route("api/v{version:apiVersion}/apps/{appId}/wallets")]
+[Route("api/v{version:apiVersion}/apps/{appId:int}/wallets")]
 public class WalletsController(WalletService walletService) : ControllerBase
 {
     [HttpPost]
@@ -36,7 +36,7 @@ public class WalletsController(WalletService walletService) : ControllerBase
         return orderItemViews;
     }
 
-    [HttpPost("{walletId}/min-balance")]
+    [HttpPost("{walletId:int}/min-balance")]
     public async Task<Wallet> SetMinBalance(int appId, int walletId, SetMinBalanceRequest request)
     {
         var wallet = await walletService.SetMinBalance(appId, walletId, request);

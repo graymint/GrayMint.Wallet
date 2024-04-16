@@ -60,7 +60,9 @@ public class TestInit
 
         // create app
         var appsClient = new AppsClient(HttpClient);
-        AppId = (await appsClient.CreateAsync()).AppId;
+        var app = await appsClient.CreateAsync();
+        AppId = app.AppId;
+        SystemWalletId = app.SystemWalletId;
 
         // attach its token
         var userApiKey = await AuthorizationClient.ResetUserApiKeyAsync(AppId.ToString());

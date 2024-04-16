@@ -140,11 +140,9 @@ namespace EWallet.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/v1/apps"
-                    urlBuilder_.Append("api/v1/apps");
-                    urlBuilder_.Append('?');
-                    urlBuilder_.Append(System.Uri.EscapeDataString("appId")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(appId, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
-                    urlBuilder_.Length--;
+                    // Operation Path: "api/v1/apps/{appId}"
+                    urlBuilder_.Append("api/v1/apps/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(appId, System.Globalization.CultureInfo.InvariantCulture)));
 
                     PrepareRequest(client_, request_, urlBuilder_);
 

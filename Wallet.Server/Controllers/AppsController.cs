@@ -22,14 +22,14 @@ public class AppsController(AppService appService,
         return StatusCode(StatusCodes.Status201Created, await appService.Create());
     }
 
-    [HttpGet]
+    [HttpGet("{appId:int}")]
     public Task<App> Get(int appId)
     {
         return appService.Get(appId);
     }
 
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [HttpPost("{appId}/clear-all")]
+    [HttpPost("{appId:int}/clear-all")]
     public async Task<ActionResult> ClearAll(int appId)
     {
         // validate
