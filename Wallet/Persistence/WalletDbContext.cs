@@ -25,6 +25,7 @@ public class WalletDbContext(DbContextOptions options) : DbContext(options)
         {
             entity.HasKey(x => x.AppId);
             entity.Property(a => a.AppId).ValueGeneratedOnAdd();
+            entity.Property(e => e.AuthorizationCode).HasMaxLength(50);
 
             entity.HasOne(e => e.SystemWallet)
                 .WithMany()
