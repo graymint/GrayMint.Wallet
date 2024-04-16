@@ -592,7 +592,7 @@ public class OrderTest : BaseControllerTest
         // create wallet1
         var walletDom = await WalletDom.Create(TestInit1);
 
-        // create a authorize order
+        // create an authorize order
         var orderId = Guid.NewGuid();
         await walletDom.CreateOrder(TestInit1, orderId: orderId);
 
@@ -606,7 +606,7 @@ public class OrderTest : BaseControllerTest
         // create wallet1
         var walletDom = await WalletDom.Create(TestInit1);
 
-        // create a authorize order
+        // create an authorize order
         var order = await walletDom.CreateOrder(TestInit1);
 
         // capture the order
@@ -622,7 +622,7 @@ public class OrderTest : BaseControllerTest
         // create wallet1
         var walletDom = await WalletDom.Create(TestInit1);
 
-        // create a authorize order
+        // create an authorize order
         var orderId = Guid.NewGuid();
         await walletDom.CreateOrder(TestInit1, orderId: orderId, transactionType: TransactionType.Sale, amount: 100);
         var receiverWallet = walletDom.ReceiverWallet;
@@ -642,11 +642,9 @@ public class OrderTest : BaseControllerTest
         // create wallet1
         var walletDom = await WalletDom.Create(TestInit1);
 
-        // create a authorize order
+        // create an authorize order
         var orderId = Guid.NewGuid();
         await walletDom.CreateOrder(TestInit1, orderId: orderId, transactionType: TransactionType.Sale);
-
-
 
         // void the order
         await walletDom.Void(TestInit1, orderId);

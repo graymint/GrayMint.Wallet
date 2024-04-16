@@ -42,9 +42,9 @@ public class AppService(WalletRepo walletRepo, WalletService walletService)
         return app.ToDto();
     }
 
-    public async Task<AppModel> GetModel(int appId)
+    public Task<AppModel> GetModel(int appId)
     {
-        return await walletRepo.GetApp(appId);
+        return walletRepo.GetApp(appId);
     }
 
     public async Task ClearAll(int appId)
@@ -79,5 +79,19 @@ public class AppService(WalletRepo walletRepo, WalletService walletService)
         await walletRepo.SaveChangesAsync();
 
         await walletRepo.GetDbContext().Database.CommitTransactionAsync();
+    }
+
+    public async Task<string?> GetAuthorizationCode(int appId)
+    {
+        var app = await walletRepo.GetApp(appId);
+        return app.AuthorizationCode;
+    }
+
+    public async Task UpdateAuthorizationCode(int appId, string authorizationCode)
+    {
+        // get max token id
+        var app = await walletRepo.GetApp(appId);
+        app.AuthorizationCode = authorizationCode;
+        await walletRepo.SaveChangesAsync();
     }
 }

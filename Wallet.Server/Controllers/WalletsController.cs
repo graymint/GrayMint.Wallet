@@ -1,14 +1,17 @@
 ﻿using Asp.Versioning;
 using EWallet.Dtos;
 using EWallet.Models.Views;
+using EWallet.Server.Security;
 using EWallet.Service;
+using GrayMint.Authorization.PermissionAuthorizations;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EWallet.Server.Controllers;
 
+[AuthorizeAppIdPermission(Permissions.AppReadWrite)]
 [ApiController]
 [ApiVersion("1")]
-[Route("api/v{version:apiVersion}/apps/{appId}/wallets")]
+[Route("api/v{version:apiVersion}/apps/{appId:int}/wallets")]
 public class WalletsController(WalletService walletService) : ControllerBase
 {
     [HttpPost]
@@ -19,9 +22,9 @@ public class WalletsController(WalletService walletService) : ControllerBase
     }
 
     [HttpGet("{walletId:int}")]
-    public async Task<Wallet> GetWallet(int appId, int walletId)
+    public Task<Wallet> GetWallet(int appId, int walletId)
     {
-        return await walletService.Get(appId, walletId);
+        return walletService.Get(appId, walletId);
     }
 
     [HttpGet("transactions")]
@@ -33,7 +36,7 @@ public class WalletsController(WalletService walletService) : ControllerBase
         return orderItemViews;
     }
 
-    [HttpPost("{walletId}/min-balance")]
+    [HttpPost("{walletId:int}/min-balance")]
     public async Task<Wallet> SetMinBalance(int appId, int walletId, SetMinBalanceRequest request)
     {
         var wallet = await walletService.SetMinBalance(appId, walletId, request);

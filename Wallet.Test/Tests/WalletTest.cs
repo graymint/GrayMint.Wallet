@@ -1,6 +1,8 @@
-﻿using EWallet.Api;
+﻿using System.Net;
+using EWallet.Api;
 using EWallet.Test.Helper;
 using GrayMint.Common.Client;
+using GrayMint.Common.Utils;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace EWallet.Test.Tests;
@@ -24,17 +26,9 @@ public class WalletTest : BaseControllerTest
     }
 
     [TestMethod]
-    public async Task Fail_GetWallet_With_AppId_That_Does_Not_Exists()
+    public Task Fail_GetWallet_With_AppId_That_Does_Not_Exists()
     {
-        try
-        {
-            // Act
-            await TestInit1.WalletsClient.GetWalletAsync(0, 1);
-            Assert.Fail("Sequence contains no element error expected");
-        }
-        catch (ApiException ex) when (ex.Message.Contains("Sequence contains no element"))
-        {
-        }
+        return TestUtil.AssertApiException(HttpStatusCode.Forbidden, TestInit1.WalletsClient.GetWalletAsync(0, 1));
     }
 
     [TestMethod]

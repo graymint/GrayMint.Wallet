@@ -1,5 +1,4 @@
-﻿#nullable enable
-namespace EWallet.Models;
+﻿namespace EWallet.Models;
 
 public class CurrencyModel
 {

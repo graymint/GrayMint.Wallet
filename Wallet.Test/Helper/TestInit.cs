@@ -4,6 +4,7 @@ using EWallet.Api;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net.Http.Headers;
 
 namespace EWallet.Test.Helper;
 public class TestInit
@@ -18,6 +19,9 @@ public class TestInit
     public OrdersClient OrdersClient => new(HttpClient);
     public int AppId { get; set; }
     public int SystemWalletId { get; set; }
+    public string AuthSecret => "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    public AuthorizationClient AuthorizationClient => new(HttpClient);
+    public ApiKey SystemApiKey { get; private set; } = default!;
 
     private TestInit(Dictionary<string, string?> appSettings, string environment)
     {
@@ -50,9 +54,18 @@ public class TestInit
 
     private async Task Init()
     {
-        // Create new app
-        var app = await AppsClient.CreateAsync();
+        // build appCreator
+        SystemApiKey = await AuthorizationClient.CreateSystemApiKeyAsync(AuthSecret);
+        HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(SystemApiKey.AccessToken.Scheme, SystemApiKey.AccessToken.Value);
+
+        // create app
+        var appsClient = new AppsClient(HttpClient);
+        var app = await appsClient.CreateAsync();
         AppId = app.AppId;
         SystemWalletId = app.SystemWalletId;
+
+        // attach its token
+        var userApiKey = await AuthorizationClient.ResetUserApiKeyAsync(AppId.ToString());
+        HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(userApiKey.AccessToken.Scheme, userApiKey.AccessToken.Value);
     }
 }
