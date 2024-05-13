@@ -94,16 +94,16 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         if (senderWalletBalance.Balance >= amount)
         {
             // update temporary balance
-            walletBalances.Single(x => x.WalletBalanceId == senderWalletBalance.WalletBalanceId)
+            walletBalances.Single(x => x.WalletId == senderWalletBalance.WalletId)
                 .Balance = senderWalletBalance.Balance - amount;
         }
         else
         {
             // update temporary balance
-            walletBalances.Single(x => x.WalletBalanceId == senderWalletBalance.WalletBalanceId)
+            walletBalances.Single(x => x.WalletId == senderWalletBalance.WalletId)
                 .Balance = 0;
 
-            walletBalances.Single(x => x.WalletBalanceId == senderWalletBalance.WalletBalanceId)
+            walletBalances.Single(x => x.WalletId == senderWalletBalance.WalletId)
                 .MinBalance = senderWalletBalance.MinBalance - (amount + senderWalletBalance.Balance);
         }
 
