@@ -33,6 +33,14 @@ public class WalletService(WalletRepo walletRepo)
         return wallet.ToDto();
     }
 
+    public async Task<Wallet[]> GetWallets(int appId, int[] walletIds)
+    {
+        // Get wallet from db
+        var wallets = await walletRepo.GetWallets(appId, walletIds);
+
+        return wallets.Select(x => x.ToDto()).ToArray();
+    }
+
     public async Task<Wallet> SetMinBalance(int appId, int walletId, SetMinBalanceRequest request)
     {
         // get wallet to make sure wallet is correct

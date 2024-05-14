@@ -306,7 +306,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     {
         // get requested wallets models
         var walletIds = request.ParticipantWallets.GetWalletIds();
-        var wallets = await walletRepo.GetWallets(appId, walletIds);
+        var wallets = await walletRepo.GetWallets(appId, walletIds.ToArray());
 
         // Validate order request
         await ValidateCreateOrderRequest(appId, request, wallets);
