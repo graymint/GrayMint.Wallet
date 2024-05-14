@@ -27,6 +27,12 @@ public class WalletsController(WalletService walletService) : ControllerBase
         return walletService.Get(appId, walletId);
     }
 
+    [HttpGet]
+    public Task<Wallet[]> GetWallets(int appId, int[] walletIds)
+    {
+        return walletService.GetWallets(appId, walletIds);
+    }
+
     [HttpGet("transactions")]
     public async Task<OrderItemView[]> GetWalletTransactions(int appId, int walletId, int? participantWalletId = null,
         DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)

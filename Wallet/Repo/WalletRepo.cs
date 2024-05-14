@@ -73,7 +73,7 @@ public class WalletRepo(WalletDbContext walletDbContext)
             .FirstOrDefaultAsync();
     }
 
-    public Task<WalletModel[]> GetWallets(int appId, List<int> walletIds)
+    public Task<WalletModel[]> GetWallets(int appId, int[] walletIds)
     {
         return walletDbContext.Wallets
             .Include(w => w.WalletBalances)
