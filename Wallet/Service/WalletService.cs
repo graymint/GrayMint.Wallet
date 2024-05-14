@@ -33,10 +33,11 @@ public class WalletService(WalletRepo walletRepo)
         return wallet.ToDto();
     }
 
-    public async Task<Wallet[]> GetWallets(int appId, int[] walletIds)
+    public async Task<Wallet[]> GetWallets(int appId, string walletIds)
     {
         // Get wallet from db
-        var wallets = await walletRepo.GetWallets(appId, walletIds);
+        var walletIdsList = walletIds.Split(',').Select(int.Parse).ToArray();
+        var wallets = await walletRepo.GetWallets(appId, walletIdsList);
 
         return wallets.Select(x => x.ToDto()).ToArray();
     }
