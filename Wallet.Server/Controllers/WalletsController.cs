@@ -28,7 +28,7 @@ public class WalletsController(WalletService walletService) : ControllerBase
     }
 
     [HttpGet]
-    public Task<Wallet[]> GetWallets(int appId, int[] walletIds)
+    public Task<Wallet[]> GetWallets(int appId, string walletIds)
     {
         return walletService.GetWallets(appId, walletIds);
     }
