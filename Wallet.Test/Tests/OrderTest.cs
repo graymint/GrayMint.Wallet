@@ -993,7 +993,6 @@ public class OrderTest : BaseControllerTest
         Assert.IsNull(wallet6AvailableBalance);
     }
 
-
     [TestMethod]
     public async Task AuthorizeAndCapture()
     {
@@ -1226,7 +1225,7 @@ public class OrderTest : BaseControllerTest
                     {
                         SenderWalletId = walletDom1.Wallet.WalletId,
                         ReceiverWalletId = walletDom2.Wallet.WalletId,
-                        Amount = 100
+                        Amount = 101
                     },
                     new ()
                     {

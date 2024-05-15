@@ -84,15 +84,12 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     }
 
     private List<WalletBalanceModel> PreCalculateOrderItemSender(List<WalletBalanceModel> walletBalances, WalletBalanceModel? senderWalletBalance,
-        int senderWalletId, decimal amount, bool forceTransfer = false)
+        int senderWalletId, decimal amount)
     {
-        if (!forceTransfer)
-        {
-            if (senderWalletBalance is null ||
-             (senderWalletBalance.Balance < amount && senderWalletBalance.Balance + (-senderWalletBalance.MinBalance) < amount))
-                throw new InsufficientBalanceException(
-                    $"WalletId: {senderWalletId} does not have sufficient balance, amount is: {amount}");
-        }
+        if (senderWalletBalance is null ||
+         (senderWalletBalance.Balance < amount && senderWalletBalance.Balance + (-senderWalletBalance.MinBalance) < amount))
+            throw new InsufficientBalanceException(
+                $"WalletId: {senderWalletId} does not have sufficient balance, amount is: {amount}");
 
         ArgumentNullException.ThrowIfNull(senderWalletBalance);
         if (senderWalletBalance.Balance >= amount)
@@ -123,22 +120,19 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         var walletIds = order.OrderItems.GetWalletIds();
         var walletBalances = await walletRepo.GetWalletBalancesWithoutTrack(order.AppId, order.CurrencyId, walletIds);
         foreach (var item in order.OrderItems)
-        {
-            var forceTransfer = order.OrderItems.First().OrderItemId != item.OrderItemId;
-            PreCalculateOrderItem(walletBalances, item, forceTransfer);
-        }
+            PreCalculateOrderItem(walletBalances, item);
     }
 
-    private void PreCalculateOrderItem(List<WalletBalanceModel> walletBalances, OrderItemModel item, bool forceTransfer = false)
+    private void PreCalculateOrderItem(List<WalletBalanceModel> walletBalances, OrderItemModel item)
     {
         var senderWalletBalance = walletBalances.SingleOrDefault(x => x.WalletId == item.SenderWalletId);
-        walletBalances = PreCalculateOrderItemSender(walletBalances, senderWalletBalance, item.SenderWalletId, item.Amount, forceTransfer);
+        walletBalances = PreCalculateOrderItemSender(walletBalances, senderWalletBalance, item.SenderWalletId, item.Amount);
 
         var receiverWalletBalance = walletBalances.SingleOrDefault(x => x.WalletId == item.ReceiverWalletId);
         PreCalculateOrderItemReceiver(walletBalances, receiverWalletBalance, item.ReceiverWalletId, item.Amount);
     }
 
-    private async Task Transfers(AppModel app, int currencyId, List<WalletTransferItem> items)
+    private async Task Transfers(AppModel app, int currencyId, List<WalletTransferItem> items, bool forceTransfer = false)
     {
         ArgumentNullException.ThrowIfNull(app.SystemWalletId);
         var newWalletTransactionId = await BuildNewWalletTransactionId();
@@ -150,7 +144,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         {
             await Transfer(item.ParticipantTransferItem.SenderWalletId, item.ParticipantTransferItem.ReceiverWalletId,
                 item.ActualReceiverWalletId, item.ParticipantTransferItem.Amount, item.OrderItemId, newWalletTransactionId,
-                walletBalances, item.TransactionType);
+                walletBalances, item.TransactionType, forceTransfer: forceTransfer);
 
             newWalletTransactionId += 2;
         }
@@ -176,12 +170,12 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     }
 
     private async Task Transfer(int senderWalletId, int receiverWalletId, int actualReceiverWalletId, decimal amount, long orderItemId,
-        long walletTransactionId, List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null)
+        long walletTransactionId, List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool forceTransfer = false)
     {
         // make sender transaction
         var senderWalletTransaction = CreateOrderTransaction(senderWalletId, actualReceiverWalletId, -amount,
             walletTransactionId, null, orderItemId,
-            walletBalances: walletBalances, transactionType: transactionType);
+            walletBalances: walletBalances, transactionType: transactionType, forceTransfer: forceTransfer);
         await walletRepo.AddEntity(senderWalletTransaction);
 
         // make receiver transaction
@@ -193,7 +187,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
 
     private WalletTransactionModel CreateOrderTransaction(int walletId, int receiverWalletId, decimal amount,
         long walletTransactionId, long? walletTransactionReferenceId, long orderItemId,
-        List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null)
+        List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool forceTransfer = false)
     {
         // get sender info
         var walletBalance = walletBalances.SingleOrDefault(x => x.WalletId == walletId);
@@ -227,6 +221,30 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
 
                         walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
                             .ModifiedTime = DateTime.UtcNow;
+                        break;
+                    }
+
+                    if (forceTransfer)
+                    {
+                        if (walletBalance is null)
+                        {
+                            newBalance = amount;
+                            walletBalances.Add(new WalletBalanceModel
+                            {
+                                WalletId = walletId,
+                                CurrencyId = walletBalances.First().CurrencyId,
+                                MinBalance = 0,
+                                Balance = amount,
+                                ModifiedTime = DateTime.UtcNow
+                            });
+                            break;
+                        }
+
+                        newBalance = walletBalance.Balance - (-amount);
+
+                        // update cache
+                        walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
+                            .Balance = walletBalance.Balance + amount;
                         break;
                     }
 
@@ -505,7 +523,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
                 OrderItemId = item.OrderItemId
             });
         }
-        await Transfers(order.App, order.CurrencyId, walletTransferItems);
+        await Transfers(order.App, order.CurrencyId, walletTransferItems, true);
 
         // update order
         order.ModifiedTime = DateTime.UtcNow;
