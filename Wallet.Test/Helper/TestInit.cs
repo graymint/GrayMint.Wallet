@@ -19,7 +19,7 @@ public class TestInit
     public OrdersClient OrdersClient => new(HttpClient);
     public int AppId { get; set; }
     public int SystemWalletId { get; set; }
-    public string AuthSecret => "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    public string AuthSecret => "ezM4NDhDRjgzLTEyRjQtNDNFRC05NzNBLUE2M0VEODgzMzkyRn0=";
     public AuthorizationClient AuthorizationClient => new(HttpClient);
     public ApiKey SystemApiKey { get; private set; } = default!;
 
