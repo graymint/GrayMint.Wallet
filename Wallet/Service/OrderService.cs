@@ -14,11 +14,15 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         if (idempotentOrder is not null)
             return idempotentOrder.ToDto();
 
+        await walletRepo.BeginTransaction();
+
         // create order
         var order = await CreateOrder(appId, request);
 
         // process order
         await ProcessOrder(order);
+
+        await walletRepo.CommitTransaction();
 
         // set output
         var createdOrder = await GetOrder(appId, request.OrderId);
@@ -329,8 +333,6 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         // Validate order request
         await ValidateCreateOrderRequest(appId, request, wallets);
 
-        await walletRepo.BeginTransaction();
-
         // create order
         var order = new OrderModel
         {
@@ -357,7 +359,6 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
             Amount = x.Amount
         }).ToArray());
         await walletRepo.SaveChangesAsync();
-        await walletRepo.CommitTransaction();
 
         return await GetOrderModel(appId, request.OrderId);
     }
