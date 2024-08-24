@@ -23,8 +23,7 @@ public class TestInit
     public AuthorizationClient AuthorizationClient => new(HttpClient);
     public ApiKey SystemApiKey { get; private set; } = default!;
 
-    private TestInit(Dictionary<string, string?> appSettings, string environment)
-    {
+    private TestInit(Dictionary<string, string?> appSettings, string environment) {
         // Application
         WebApp = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -43,8 +42,7 @@ public class TestInit
 
         Scope = WebApp.Services.CreateScope();
     }
-    public static async Task<TestInit> Create(Dictionary<string, string?>? appSettings = null, string environment = "Development")
-    {
+    public static async Task<TestInit> Create(Dictionary<string, string?>? appSettings = null, string environment = "Development") {
         appSettings ??= new Dictionary<string, string?>();
 
         var testInit = new TestInit(appSettings, environment);
@@ -52,8 +50,7 @@ public class TestInit
         return testInit;
     }
 
-    private async Task Init()
-    {
+    private async Task Init() {
         // build appCreator
         SystemApiKey = await AuthorizationClient.CreateSystemApiKeyAsync(AuthSecret);
         HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(SystemApiKey.AccessToken.Scheme, SystemApiKey.AccessToken.Value);
