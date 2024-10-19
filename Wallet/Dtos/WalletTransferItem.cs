@@ -2,7 +2,7 @@
 
 namespace EWallet.Dtos;
 
-public sealed class WalletTransferItem
+public sealed record WalletTransferItem
 {
     public required ParticipantTransferItem ParticipantTransferItem { get; init; }
     public required int ActualReceiverWalletId { get; init; }

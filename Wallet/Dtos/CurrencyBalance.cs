@@ -1,6 +1,6 @@
 ﻿namespace EWallet.Dtos;
 
-public sealed class CurrencyBalance
+public sealed record CurrencyBalance
 {
     public required int CurrencyId { get; init; }
     public required decimal Balance { get; init; }

@@ -2,7 +2,7 @@
 
 namespace EWallet.Dtos;
 
-public sealed class CreateOrderRequest
+public sealed record CreateOrderRequest
 {
     public required Guid OrderId { get; init; }
     public required int CurrencyId { get; init; }

@@ -1,6 +1,6 @@
 ﻿namespace EWallet.Dtos;
 
-public sealed class OrderItem
+public sealed record OrderItem
 {
     public required long OrderItemId { get; init; }
     public required int SenderWalletId { get; init; }
