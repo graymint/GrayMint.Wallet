@@ -1,7 +1,7 @@
 ﻿using EWallet.Api;
 using EWallet.Exceptions;
 using EWallet.Test.Helper;
-using GrayMint.Common.Client;
+using GrayMint.Common.ApiClients;
 using GrayMint.Common.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;

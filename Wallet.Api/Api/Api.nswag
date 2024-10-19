@@ -62,7 +62,7 @@
   },
   "codeGenerators": {
     "openApiToCSharpClient": {
-      "clientBaseClass": "GrayMint.Common.Client.ApiClientCommon",
+      "clientBaseClass": "GrayMint.Common.ApiClients.ApiClientCommon",
       "configurationClass": null,
       "generateClientClasses": true,
       "generateClientInterfaces": false,
@@ -71,7 +71,7 @@
       "disposeHttpClient": false,
       "protectedMethods": [],
       "generateExceptionClasses": false,
-      "exceptionClass": "GrayMint.Common.Client.ApiException",
+      "exceptionClass": "GrayMint.Common.ApiClients.ApiException",
       "wrapDtoExceptions": true,
       "useHttpClientCreationMethod": false,
       "httpClientType": "System.Net.Http.HttpClient",

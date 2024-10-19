@@ -1,8 +1,8 @@
 ﻿using EWallet.Test.Helper;
-using GrayMint.Common.Client;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Net;
 using EWallet.Api;
+using GrayMint.Common.ApiClients;
 
 namespace EWallet.Test.Tests;
 
