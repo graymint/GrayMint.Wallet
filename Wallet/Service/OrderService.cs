@@ -8,13 +8,45 @@ namespace EWallet.Service;
 
 public class OrderService(WalletRepo walletRepo, AppService appService)
 {
-    public async Task<Order> Create(int appId, CreateOrderRequest request)
-    {
+
+    public async Task<Order[]> CreateBatchOrders(int appId, CreateSingleTransferRequest[] requests) {
+        await walletRepo.BeginTransaction();
+
+        var orders = new List<Order>();
+        foreach (var item in requests)
+        {
+            var order = await CreateImpl(appId, new CreateOrderRequest
+            {
+                OrderId = item.OrderId,
+                CurrencyId = item.CurrencyId,
+                OrderTypeId = item.OrderTypeId,
+                TransactionType = item.TransactionType,
+                ParticipantWallets = new List<ParticipantTransferItem> {
+                    new ParticipantTransferItem{
+                        Amount = item.Amount,
+                        SenderWalletId = item.SenderWalletId,
+                        ReceiverWalletId = item.ReceiverWalletId 
+                    } 
+                }
+            }, withTransaction: false);
+            orders.Add(order);
+        }
+
+        await walletRepo.CommitTransaction();
+        return orders.ToArray();
+    }
+
+    public Task<Order> CreateByLadder(int appId, CreateOrderRequest request) {
+        return CreateImpl(appId, request);
+    }
+
+    public async Task<Order> CreateImpl(int appId, CreateOrderRequest request, bool withTransaction = true) {
         var idempotentOrder = await ValidateOrderIdempotent(appId, request);
         if (idempotentOrder is not null)
             return idempotentOrder.ToDto();
 
-        await walletRepo.BeginTransaction();
+        if (withTransaction)
+            await walletRepo.BeginTransaction();
 
         // create order
         var order = await CreateOrder(appId, request);
@@ -22,15 +54,15 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         // process order
         await ProcessOrder(order);
 
-        await walletRepo.CommitTransaction();
+        if (withTransaction)
+            await walletRepo.CommitTransaction();
 
         // set output
         var createdOrder = await GetOrder(appId, request.OrderId);
         return createdOrder;
     }
 
-    private async Task ProcessOrder(OrderModel order)
-    {
+    private async Task ProcessOrder(OrderModel order) {
         // add system wallet id to list walletIds
         ArgumentNullException.ThrowIfNull(order.OrderItems);
         ArgumentNullException.ThrowIfNull(order.App);
@@ -67,8 +99,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     }
 
     private void PreCalculateOrderItemReceiver(List<WalletBalanceModel> walletBalances, WalletBalanceModel? receiverWalletBalance,
-        int receiverWalletId, decimal amount)
-    {
+        int receiverWalletId, decimal amount) {
         if (receiverWalletBalance is null)
         {
             walletBalances.Add(new WalletBalanceModel
@@ -88,8 +119,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     }
 
     private List<WalletBalanceModel> PreCalculateOrderItemSender(List<WalletBalanceModel> walletBalances, WalletBalanceModel? senderWalletBalance,
-        int senderWalletId, decimal amount)
-    {
+        int senderWalletId, decimal amount) {
         if (senderWalletBalance is null ||
          (senderWalletBalance.Balance < amount && senderWalletBalance.Balance + (-senderWalletBalance.MinBalance) < amount))
             throw new InsufficientBalanceException(
@@ -115,8 +145,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         return walletBalances;
     }
 
-    private async Task PreCalculateOrderItems(OrderModel order)
-    {
+    private async Task PreCalculateOrderItems(OrderModel order) {
         ArgumentNullException.ThrowIfNull(order.OrderItems);
         ArgumentNullException.ThrowIfNull(order.App);
         ArgumentNullException.ThrowIfNull(order.App.SystemWalletId);
@@ -127,8 +156,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
             PreCalculateOrderItem(walletBalances, item);
     }
 
-    private void PreCalculateOrderItem(List<WalletBalanceModel> walletBalances, OrderItemModel item)
-    {
+    private void PreCalculateOrderItem(List<WalletBalanceModel> walletBalances, OrderItemModel item) {
         var senderWalletBalance = walletBalances.SingleOrDefault(x => x.WalletId == item.SenderWalletId);
         walletBalances = PreCalculateOrderItemSender(walletBalances, senderWalletBalance, item.SenderWalletId, item.Amount);
 
@@ -136,8 +164,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         PreCalculateOrderItemReceiver(walletBalances, receiverWalletBalance, item.ReceiverWalletId, item.Amount);
     }
 
-    private async Task Transfers(AppModel app, int currencyId, List<WalletTransferItem> items, bool forceTransfer = false)
-    {
+    private async Task Transfers(AppModel app, int currencyId, List<WalletTransferItem> items, bool forceTransfer = false) {
         ArgumentNullException.ThrowIfNull(app.SystemWalletId);
         var newWalletTransactionId = await BuildNewWalletTransactionId();
         var walletIds = GetWalletIds(items);
@@ -155,8 +182,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         await walletRepo.AddEntities(walletBalances.Where(x => x.WalletBalanceId == 0).ToArray());
     }
 
-    private List<int> GetWalletIds(ICollection<WalletTransferItem> items)
-    {
+    private List<int> GetWalletIds(ICollection<WalletTransferItem> items) {
         // get list senders
         var list = items.Select(x => x.ParticipantTransferItem.SenderWalletId)
             .Distinct()
@@ -174,8 +200,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     }
 
     private async Task Transfer(int senderWalletId, int receiverWalletId, int actualReceiverWalletId, decimal amount, long orderItemId,
-        long walletTransactionId, List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool forceTransfer = false)
-    {
+        long walletTransactionId, List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool forceTransfer = false) {
         // make sender transaction
         var senderWalletTransaction = CreateOrderTransaction(senderWalletId, actualReceiverWalletId, -amount,
             walletTransactionId, null, orderItemId,
@@ -191,8 +216,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
 
     private WalletTransactionModel CreateOrderTransaction(int walletId, int receiverWalletId, decimal amount,
         long walletTransactionId, long? walletTransactionReferenceId, long orderItemId,
-        List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool forceTransfer = false)
-    {
+        List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool forceTransfer = false) {
         // get sender info
         var walletBalance = walletBalances.SingleOrDefault(x => x.WalletId == walletId);
 
@@ -324,8 +348,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         return walletTransactionModel;
     }
 
-    private async Task<OrderModel> CreateOrder(int appId, CreateOrderRequest request)
-    {
+    private async Task<OrderModel> CreateOrder(int appId, CreateOrderRequest request) {
         // get requested wallets models
         var walletIds = request.ParticipantWallets.GetWalletIds();
         var wallets = await walletRepo.GetWallets(appId, walletIds.ToArray());
@@ -363,15 +386,13 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         return await GetOrderModel(appId, request.OrderId);
     }
 
-    private async Task<long> BuildNewWalletTransactionId()
-    {
+    private async Task<long> BuildNewWalletTransactionId() {
         var maxId = await walletRepo.GetMaxWalletTransactionId();
         maxId = maxId is null ? 0 : maxId + 1;
         return (long)maxId;
     }
 
-    private async Task ValidateCreateOrderRequest(int appId, CreateOrderRequest request, WalletModel[] requestedWallets)
-    {
+    private async Task ValidateCreateOrderRequest(int appId, CreateOrderRequest request, WalletModel[] requestedWallets) {
         // validate transaction type
         if (request.TransactionType != TransactionType.Authorize && request.TransactionType != TransactionType.Sale)
             throw new InvalidOperationException($"{request.TransactionType} does not accepted.");
@@ -413,8 +434,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
             throw new InvalidOperationException("duplicate records.");
     }
 
-    private async Task<OrderModel?> ValidateOrderIdempotent(int appId, CreateOrderRequest request)
-    {
+    private async Task<OrderModel?> ValidateOrderIdempotent(int appId, CreateOrderRequest request) {
         var order = await walletRepo.FindOrder(appId, request.OrderId);
         if (order is null)
             return null;
@@ -436,8 +456,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         return null;
     }
 
-    public async Task<Order> Capture(int appId, Guid orderId)
-    {
+    public async Task<Order> Capture(int appId, Guid orderId) {
         // get order info
         var order = await GetOrderFull(appId, orderId);
         ArgumentNullException.ThrowIfNull(order.App);
@@ -483,8 +502,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         return await GetOrder(appId, orderId);
     }
 
-    public async Task<Order> Void(int appId, Guid orderId)
-    {
+    public async Task<Order> Void(int appId, Guid orderId) {
         await walletRepo.BeginTransaction();
 
         // get order info
@@ -537,22 +555,19 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         return await GetOrder(order.AppId, order.OrderReferenceNumber);
     }
 
-    public async Task<Order> GetOrder(int appId, Guid orderId)
-    {
+    public async Task<Order> GetOrder(int appId, Guid orderId) {
         // Get order
         var order = await GetOrderModel(appId, orderId);
         return order.ToDto();
     }
 
-    private async Task<OrderModel> GetOrderModel(int appId, Guid orderId)
-    {
+    private async Task<OrderModel> GetOrderModel(int appId, Guid orderId) {
         // Get order
         var order = await walletRepo.GetOrder(appId, orderId);
         return order;
     }
 
-    private async Task<OrderModel> GetOrderFull(int appId, Guid orderId)
-    {
+    private async Task<OrderModel> GetOrderFull(int appId, Guid orderId) {
         // Get order
         var order = await walletRepo.GetOrderFull(appId, orderId);
         return order;

@@ -1,5 +1,4 @@
-﻿using Asp.Versioning;
-using EWallet.Server.Security;
+﻿using EWallet.Server.Security;
 using EWallet.Service;
 using GrayMint.Authorization.PermissionAuthorizations;
 using Microsoft.AspNetCore.Mvc;
@@ -8,8 +7,7 @@ namespace EWallet.Server.Controllers;
 
 [AuthorizeAppIdPermission(Permissions.AppReadWrite)]
 [ApiController]
-[ApiVersion("1")]
-[Route("api/v{version:apiVersion}/apps/{appId}/currencies")]
+[Route("api/apps/{appId}/currencies")]
 public class CurrenciesController(WalletService walletService) : ControllerBase
 {
     [HttpPost]

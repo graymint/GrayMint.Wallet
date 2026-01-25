@@ -1,5 +1,4 @@
-﻿using Asp.Versioning;
-using EWallet.Dtos;
+﻿using EWallet.Dtos;
 using EWallet.Models.Views;
 using EWallet.Server.Security;
 using EWallet.Service;
@@ -10,8 +9,7 @@ namespace EWallet.Server.Controllers;
 
 [AuthorizeAppIdPermission(Permissions.AppReadWrite)]
 [ApiController]
-[ApiVersion("1")]
-[Route("api/v{version:apiVersion}/apps/{appId:int}/wallets")]
+[Route("api/apps/{appId:int}/wallets")]
 public class WalletsController(WalletService walletService) : ControllerBase
 {
     [HttpPost]

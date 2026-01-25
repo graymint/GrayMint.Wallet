@@ -18,14 +18,14 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        builder.Services.AddGrayMintCommonServices(new RegisterServicesOptions());
         builder.Services.AddDbContext<WalletDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("WalletDatabase")));
         builder.Services.AddScoped<AppService>();
         builder.Services.AddScoped<WalletService>();
         builder.Services.AddScoped<OrderService>();
         builder.Services.AddScoped<WalletRepo>();
         builder.Services.AddHttpClient();
-        builder.Services.AddGrayMintSwagger(title: "wallet", true);
+        builder.Services.AddGrayMintCommonServices(new RegisterServicesOptions())
+            .AddGrayMintSwagger();
 
         // Add response compression services
         builder.Services.AddResponseCompression(options =>
@@ -52,7 +52,10 @@ public class Program
         
         var webApp = builder.Build();
         webApp.UseGrayMintCommonServices(new UseServicesOptions());
-        webApp.UseGrayMintSwagger();
+        webApp.UseGrayMintSwagger(new UseSwaggerOptions
+        {
+            RedirectRootToSwaggerUi = true
+        });
         await webApp.Services.UseGrayMintDatabaseCommand<WalletDbContext>(args);
         
         // Initializing App

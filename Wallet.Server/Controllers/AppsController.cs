@@ -1,5 +1,4 @@
-﻿using Asp.Versioning;
-using EWallet.Dtos;
+﻿using EWallet.Dtos;
 using EWallet.Server.Security;
 using EWallet.Service;
 using GrayMint.Authorization.PermissionAuthorizations;
@@ -9,8 +8,7 @@ namespace EWallet.Server.Controllers;
 
 [AuthorizeAppIdPermission(Permissions.AppReadWrite)]
 [ApiController]
-[ApiVersion("1")]
-[Route("/api/v{version:apiVersion}/apps")]
+[Route("/api/apps")]
 public class AppsController(AppService appService,
     IHostEnvironment environment) : ControllerBase
 {
