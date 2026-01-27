@@ -1,19 +1,15 @@
-using EWallet.Server.Controllers;
 using EWallet.Service;
 using GrayMint.Authorization.Abstractions;
 using GrayMint.Authorization.PermissionAuthorizations;
 using GrayMint.Common.Exceptions;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
-using System.Text.Json;
 
 namespace EWallet.Server.Security;
 
 public class AuthorizationProvider(
     AppService appService,
-    IOptions<AppOptions> appSettings,
-     ILogger<AuthorizationProvider> logger) : IAuthorizationProvider
+    IOptions<AppOptions> appSettings) : IAuthorizationProvider
 {
     private readonly AppOptions _appOptions = appSettings.Value;
 
@@ -24,7 +20,6 @@ public class AuthorizationProvider(
 
     public async Task<string?> GetAuthorizationCode(ClaimsPrincipal principal) {
         var userId = await GetUserId(principal) ?? throw new NotExistsException("Could not find userId.");
-        logger.LogError($"Getting authorization code for SystemAuthorizationCode:{_appOptions.SystemAuthorizationCode}");
 
         if (userId == AuthorizationConstants.SystemUserId)
             return _appOptions.SystemAuthorizationCode;
