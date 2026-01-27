@@ -8,7 +8,6 @@ namespace EWallet.Service;
 
 public class OrderService(WalletRepo walletRepo, AppService appService)
 {
-
     public async Task<Order[]> CreateBatchOrders(int appId, CreateSingleTransferRequest[] requests) {
         await walletRepo.BeginTransaction();
 
@@ -21,13 +20,15 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
                 CurrencyId = item.CurrencyId,
                 OrderTypeId = item.OrderTypeId,
                 TransactionType = item.TransactionType,
-                ParticipantWallets = new List<ParticipantTransferItem> {
-                    new ParticipantTransferItem{
+                ParticipantWallets =
+                [
+                    new ParticipantTransferItem
+                    {
                         Amount = item.Amount,
                         SenderWalletId = item.SenderWalletId,
-                        ReceiverWalletId = item.ReceiverWalletId 
-                    } 
-                }
+                        ReceiverWalletId = item.ReceiverWalletId
+                    }
+                ]
             }, withTransaction: false);
             orders.Add(order);
         }
