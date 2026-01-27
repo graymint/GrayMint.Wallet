@@ -1,27 +1,30 @@
-using System.Security.Claims;
+using EWallet.Server.Controllers;
 using EWallet.Service;
 using GrayMint.Authorization.Abstractions;
 using GrayMint.Authorization.PermissionAuthorizations;
 using GrayMint.Common.Exceptions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace EWallet.Server.Security;
 
 public class AuthorizationProvider(
     AppService appService,
-    IOptions<AppOptions> appSettings) : IAuthorizationProvider
+    IOptions<AppOptions> appSettings,
+     ILogger<AuthorizationProvider> logger) : IAuthorizationProvider
 {
     private readonly AppOptions _appOptions = appSettings.Value;
 
-    public Task<string?> GetUserId(ClaimsPrincipal principal)
-    {
+    public Task<string?> GetUserId(ClaimsPrincipal principal) {
         var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
         return Task.FromResult(userId);
     }
 
-    public async Task<string?> GetAuthorizationCode(ClaimsPrincipal principal)
-    {
+    public async Task<string?> GetAuthorizationCode(ClaimsPrincipal principal) {
         var userId = await GetUserId(principal) ?? throw new NotExistsException("Could not find userId.");
+        logger.LogError($"Getting authorization code for SystemAuthorizationCode:{_appOptions.SystemAuthorizationCode}");
 
         if (userId == AuthorizationConstants.SystemUserId)
             return _appOptions.SystemAuthorizationCode;
@@ -30,8 +33,7 @@ public class AuthorizationProvider(
         return authorizationCode;
     }
 
-    public async Task OnAuthenticated(ClaimsPrincipal principal)
-    {
+    public async Task OnAuthenticated(ClaimsPrincipal principal) {
         var userId = await GetUserId(principal) ?? throw new NotExistsException("Could not find userId.");
         var claimsIdentity = principal.Identities.First();
 
@@ -46,8 +48,7 @@ public class AuthorizationProvider(
         }
     }
 
-    public async Task RestAuthorizationCode(ClaimsPrincipal principal)
-    {
+    public async Task RestAuthorizationCode(ClaimsPrincipal principal) {
         var userId = await GetUserId(principal) ?? throw new NotExistsException("Could not find userId.");
         if (userId == AuthorizationConstants.SystemUserId)
             throw new NotSupportedException("Could not update system authorization code.");
