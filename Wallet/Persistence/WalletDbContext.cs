@@ -5,7 +5,7 @@ namespace EWallet.Persistence;
 
 public class WalletDbContext(DbContextOptions options) : DbContext(options)
 {
-    public const string Schema = "dbo";
+    public const string Schema = "wallet";
 
     public DbSet<AppModel> Apps { get; set; } = default!;
     public DbSet<CurrencyModel> Currencies { get; set; } = default!;

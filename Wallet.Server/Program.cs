@@ -14,8 +14,7 @@ namespace EWallet.Server;
 
 public class Program
 {
-    public static async Task Main(string[] args)
-    {
+    public static async Task Main(string[] args) {
         var builder = WebApplication.CreateBuilder(args);
 
         builder.Services.AddDbContext<WalletDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("WalletDatabase")));
@@ -25,7 +24,10 @@ public class Program
         builder.Services.AddScoped<WalletRepo>();
         builder.Services.AddHttpClient();
         builder.Services.AddGrayMintCommonServices(new RegisterServicesOptions())
-            .AddGrayMintSwagger();
+            .AddGrayMintSwagger(new AddSwaggerOptions
+            {
+                Title = "Wallet API",
+            });
 
         // Add response compression services
         builder.Services.AddResponseCompression(options =>
@@ -49,7 +51,7 @@ public class Program
 
         builder.Services.Configure<AppOptions>(builder.Configuration.GetSection("App"));
         builder.Services.AddApplicationInsightsTelemetry();
-        
+
         var webApp = builder.Build();
         webApp.UseGrayMintCommonServices(new UseServicesOptions());
         webApp.UseGrayMintSwagger(new UseSwaggerOptions
@@ -57,7 +59,7 @@ public class Program
             RedirectRootToSwaggerUi = true
         });
         await webApp.Services.UseGrayMintDatabaseCommand<WalletDbContext>(args);
-        
+
         // Initializing App
         using (var scope = webApp.Services.CreateScope())
         {

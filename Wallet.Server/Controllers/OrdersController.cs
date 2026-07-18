@@ -16,20 +16,19 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
     public async Task<Order> CreateOrder(int appId, CreateOrderRequest request, CancellationToken cancellationToken) {
         try
         {
-            logger.LogWarning("CreateOrder.Start lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
+            logger.LogInformation("CreateOrder.Start lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
 
             using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
 
-            logger.LogWarning("CreateOrder.Finish lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
-
-
+            logger.LogInformation("CreateOrder.Finish lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
+            
             // create order
             var order = await orderService.CreateByLadder(appId, request);
             return order;
         }
         catch (Exception e)
         {
-            logger.LogWarning(e, "CreateOrder.Catch lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
+            logger.LogInformation(e, "CreateOrder.Catch lock. OrderId: {OrderId}, Time {Time}:", request.OrderId, DateTime.UtcNow);
             throw;
         }
     }
@@ -39,11 +38,11 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
         try
         {
             var orderIds = string.Join(", ", requests.Select(r => r.OrderId));
-            logger.LogWarning("CreateBatchOrders.Start lock. OrderIds: {OrderIds}, Time {Time}:", orderIds, DateTime.UtcNow);
+            logger.LogInformation("CreateBatchOrders.Start lock. OrderIds: {OrderIds}, Time {Time}:", orderIds, DateTime.UtcNow);
 
             using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
 
-            logger.LogWarning("CreateBatchOrders.Finish lock. OrderIds: {OrderIds}, Time {Time}:", orderIds, DateTime.UtcNow);
+            logger.LogInformation("CreateBatchOrders.Finish lock. OrderIds: {OrderIds}, Time {Time}:", orderIds, DateTime.UtcNow);
 
             // create batch orders
             var orders = await orderService.CreateBatchOrders(appId, requests);
@@ -52,7 +51,7 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
         catch (Exception e)
         {
             var orderIds = string.Join(", ", requests.Select(r => r.OrderId));
-            logger.LogWarning(e, "CreateBatchOrders.Catch lock. OrderIds: {OrderIds}, Time {Time}:", orderIds, DateTime.UtcNow);
+            logger.LogInformation(e, "CreateBatchOrders.Catch lock. OrderIds: {OrderIds}, Time {Time}:", orderIds, DateTime.UtcNow);
             throw;
         }
     }
@@ -67,9 +66,9 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
     public async Task<Order> Capture(int appId, Guid orderId, CancellationToken cancellationToken) {
         try
         {
-            logger.LogWarning("Capture.Start lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
+            logger.LogInformation("Capture.Start lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
             using var appLock = await AsyncLock.LockAsync($"appId: {appId}", timeout: TimeSpan.FromMinutes(10), cancellationToken);
-            logger.LogWarning("Capture.Finish lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
+            logger.LogInformation("Capture.Finish lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
 
             // capture
             var order = await orderService.Capture(appId, orderId);
@@ -78,7 +77,7 @@ public class OrdersController(OrderService orderService, ILogger<OrdersControlle
         }
         catch (Exception e)
         {
-            logger.LogWarning(e, "Capture.Catch lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
+            logger.LogInformation(e, "Capture.Catch lock. OrderId: {OrderId}, Time {Time}:", orderId, DateTime.UtcNow);
 
             throw;
         }
