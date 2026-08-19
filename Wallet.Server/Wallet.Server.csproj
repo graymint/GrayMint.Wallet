@@ -8,10 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="GrayMint.Authorization.MicroserviceAuthorization" Version="3.1.143" />
-    <PackageReference Include="GrayMint.Common.AspNetCore" Version="2.1.245" />
-    <PackageReference Include="GrayMint.Common.Swagger" Version="2.1.245" />
-    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
+    <PackageReference Include="GrayMint.Authorization.MicroserviceAuthorization" Version="3.2.165" />
+    <PackageReference Include="GrayMint.Common.AspNetCore" Version="2.1.270" />
+    <PackageReference Include="GrayMint.Common.Swagger" Version="2.1.270" />
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.1.2" />
   </ItemGroup>
 
   <ItemGroup>
