@@ -3,6 +3,7 @@ using EWallet.Persistence;
 using EWallet.Repo;
 using EWallet.Server.Security;
 using EWallet.Service;
+using EWallet.Settings;
 using GrayMint.Authorization.MicroserviceAuthorization;
 using GrayMint.Common.AspNetCore;
 using GrayMint.Common.EntityFrameworkCore;
@@ -50,7 +51,14 @@ public class Program
         builder.AddGrayMintCommonAuthorizationForMicroservice<AuthorizationProvider>();
 
         builder.Services.Configure<AppOptions>(builder.Configuration.GetSection("App"));
-        builder.Services.AddApplicationInsightsTelemetry();
+        var appSettings = builder.Configuration.GetSection("App").Get<AppSettings>() ?? throw new Exception("Could not load App section in appSettings.json file."); ;
+
+        // Enables Application Insights telemetry collection.
+        if (!string.IsNullOrEmpty(appSettings.AzureLogConnectionString))
+            builder.Services.AddApplicationInsightsTelemetry(options =>
+            {
+                options.ConnectionString = appSettings.AzureLogConnectionString;
+            });
 
         var webApp = builder.Build();
         webApp.UseGrayMintCommonServices(new UseServicesOptions());
