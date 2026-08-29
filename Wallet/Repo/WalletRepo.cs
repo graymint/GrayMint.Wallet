@@ -130,9 +130,9 @@ public class WalletRepo(WalletDbContext walletDbContext)
     public async Task<OrderItemView[]> GetOrderItemsByWalletIds(int appId, int walletId, int? participantWalletId = null,
         DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
-        const int days = 31;
+        const int days = 365;
         if (beginTime.HasValue && endTime.HasValue && (endTime.Value - beginTime.Value).TotalDays > days)
-            throw new Exception("The report works for one month.");
+            throw new Exception("The report works for one year.");
 
         if (beginTime == null && endTime == null)
         {
