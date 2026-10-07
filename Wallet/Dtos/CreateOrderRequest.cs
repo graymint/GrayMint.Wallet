@@ -9,4 +9,5 @@ public sealed record CreateOrderRequest
     public required int OrderTypeId { get; set; }
     public required TransactionType TransactionType { get; init; }
     public required List<ParticipantTransferItem> ParticipantWallets { get; init; }
+    public bool? AllowDebt { get; init; }
 }

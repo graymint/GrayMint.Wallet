@@ -7,6 +7,7 @@ public class OrderModel
     public int CurrencyId { get; set; }
     public TransactionType TransactionType { get; set; }
     public int OrderTypeId { get; set; }
+    public bool AllowDebt { get; set; }
     public DateTime? AuthorizedTime { get; set; }
     public DateTime? CapturedTime { get; set; }
     public DateTime? VoidedTime { get; set; }

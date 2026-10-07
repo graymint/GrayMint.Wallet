@@ -1346,6 +1346,55 @@ public class OrderTest : BaseControllerTest
     }
 
     [TestMethod]
+    public async Task InsufficientBalance_when_a_later_leg_exceeds_the_remaining_min_balance()
+    {
+        // wallet1 can spend 151 in total: balance 100 plus min balance 51
+        var systemWalletDom = await WalletDom.Create(TestInit1);
+        var walletDom1 = await WalletDom.Create(TestInit1, minBalance: -51, currencyId: systemWalletDom.CurrencyId);
+        var walletDom2 = await WalletDom.Create(TestInit1, minBalance: null, currencyId: systemWalletDom.CurrencyId);
+        var walletDom3 = await WalletDom.Create(TestInit1, minBalance: null, currencyId: systemWalletDom.CurrencyId);
+        await systemWalletDom.CreateOrder(TestInit1, receiverWalletId: walletDom1.Wallet.WalletId, amount: 100, transactionType: TransactionType.Sale);
+
+        // 150 + 100 needs 250
+        var request = new CreateOrderRequest
+        {
+            OrderId = Guid.NewGuid(),
+            CurrencyId = systemWalletDom.CurrencyId,
+            TransactionType = TransactionType.Authorize,
+            ParticipantWallets = new List<ParticipantTransferItem>
+            {
+                new()
+                {
+                    SenderWalletId = walletDom1.Wallet.WalletId,
+                    ReceiverWalletId = walletDom2.Wallet.WalletId,
+                    Amount = 150
+                },
+                new()
+                {
+                    SenderWalletId = walletDom1.Wallet.WalletId,
+                    ReceiverWalletId = walletDom3.Wallet.WalletId,
+                    Amount = 100
+                }
+            }
+        };
+
+        try
+        {
+            await TestInit1.OrdersClient.CreateOrderAsync(TestInit1.AppId, request);
+            Assert.Fail("Insufficient Balance exception is expected.");
+        }
+        catch (ApiException ex)
+        {
+            Assert.AreEqual(nameof(InsufficientBalanceException), ex.ExceptionTypeName);
+        }
+
+        var wallet1 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom1.Wallet.WalletId);
+        ArgumentNullException.ThrowIfNull(wallet1.Currencies);
+        Assert.AreEqual(100, wallet1.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).Balance);
+        Assert.AreEqual(-51, wallet1.Currencies.Single(c => c.CurrencyId == systemWalletDom.CurrencyId).MinBalance);
+    }
+
+    [TestMethod]
     public async Task Capture()
     {
         // Create wallets

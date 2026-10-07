@@ -8,4 +8,5 @@ public sealed record WalletTransferItem
     public required int ActualReceiverWalletId { get; init; }
     public required long OrderItemId { get; init; }
     public required TransactionType? TransactionType { get; init; }
+    public bool AllowDebt { get; init; }
 }

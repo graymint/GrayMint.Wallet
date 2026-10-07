@@ -11,4 +11,5 @@ public sealed record CreateSingleTransferRequest
     public required decimal Amount { get; init; }
     public required int OrderTypeId { get; set; }
     public required TransactionType TransactionType { get; init; }
+    public bool? AllowDebt { get; init; }
 }

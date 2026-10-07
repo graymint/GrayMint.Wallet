@@ -1290,6 +1290,7 @@ export class CreateOrderRequest implements ICreateOrderRequest {
     orderTypeId!: number;
     transactionType!: TransactionType;
     participantWallets!: ParticipantTransferItem[];
+    allowDebt?: boolean | null;
 
     constructor(data?: ICreateOrderRequest) {
         if (data) {
@@ -1317,6 +1318,7 @@ export class CreateOrderRequest implements ICreateOrderRequest {
             else {
                 this.participantWallets = null as any;
             }
+            this.allowDebt = _data["allowDebt"] !== undefined ? _data["allowDebt"] : null as any;
         }
     }
 
@@ -1338,6 +1340,7 @@ export class CreateOrderRequest implements ICreateOrderRequest {
             for (let item of this.participantWallets)
                 data["participantWallets"].push(item ? item.toJSON() : null as any);
         }
+        data["allowDebt"] = this.allowDebt !== undefined ? this.allowDebt : null as any;
         return data;
     }
 }
@@ -1348,6 +1351,7 @@ export interface ICreateOrderRequest {
     orderTypeId: number;
     transactionType: TransactionType;
     participantWallets: ParticipantTransferItem[];
+    allowDebt?: boolean | null;
 }
 
 export class ParticipantTransferItem implements IParticipantTransferItem {
@@ -1402,6 +1406,7 @@ export class CreateSingleTransferRequest implements ICreateSingleTransferRequest
     amount!: number;
     orderTypeId!: number;
     transactionType!: TransactionType;
+    allowDebt?: boolean | null;
 
     constructor(data?: ICreateSingleTransferRequest) {
         if (data) {
@@ -1421,6 +1426,7 @@ export class CreateSingleTransferRequest implements ICreateSingleTransferRequest
             this.amount = _data["amount"] !== undefined ? _data["amount"] : null as any;
             this.orderTypeId = _data["orderTypeId"] !== undefined ? _data["orderTypeId"] : null as any;
             this.transactionType = _data["transactionType"] !== undefined ? _data["transactionType"] : null as any;
+            this.allowDebt = _data["allowDebt"] !== undefined ? _data["allowDebt"] : null as any;
         }
     }
 
@@ -1440,6 +1446,7 @@ export class CreateSingleTransferRequest implements ICreateSingleTransferRequest
         data["amount"] = this.amount !== undefined ? this.amount : null as any;
         data["orderTypeId"] = this.orderTypeId !== undefined ? this.orderTypeId : null as any;
         data["transactionType"] = this.transactionType !== undefined ? this.transactionType : null as any;
+        data["allowDebt"] = this.allowDebt !== undefined ? this.allowDebt : null as any;
         return data;
     }
 }
@@ -1452,6 +1459,7 @@ export interface ICreateSingleTransferRequest {
     amount: number;
     orderTypeId: number;
     transactionType: TransactionType;
+    allowDebt?: boolean | null;
 }
 
 export class Wallet implements IWallet {

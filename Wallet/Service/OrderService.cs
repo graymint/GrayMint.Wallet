@@ -20,6 +20,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
                 CurrencyId = item.CurrencyId,
                 OrderTypeId = item.OrderTypeId,
                 TransactionType = item.TransactionType,
+                AllowDebt = item.AllowDebt,
                 ParticipantWallets =
                 [
                     new ParticipantTransferItem
@@ -88,6 +89,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
                     Amount = participantWallet.Amount
                 },
                 TransactionType = order.TransactionType,
+                AllowDebt = order.AllowDebt,
                 ActualReceiverWalletId = participantWallet.ReceiverWalletId,
                 OrderItemId = participantWallet.OrderItemId
             });
@@ -119,31 +121,40 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         }
     }
 
-    private List<WalletBalanceModel> PreCalculateOrderItemSender(List<WalletBalanceModel> walletBalances, WalletBalanceModel? senderWalletBalance,
-        int senderWalletId, decimal amount) {
-        if (senderWalletBalance is null ||
-         (senderWalletBalance.Balance < amount && senderWalletBalance.Balance + (-senderWalletBalance.MinBalance) < amount))
+    private void PreCalculateOrderItemSender(List<WalletBalanceModel> walletBalances, WalletBalanceModel? senderWalletBalance,
+        int senderWalletId, int currencyId, decimal amount, bool allowDebt) {
+        // a debt order may start from a wallet that has no balance yet
+        if (senderWalletBalance is null && allowDebt)
+        {
+            senderWalletBalance = new WalletBalanceModel
+            {
+                WalletId = senderWalletId,
+                CurrencyId = currencyId,
+                Balance = 0,
+                MinBalance = 0,
+                ModifiedTime = DateTime.UtcNow
+            };
+            walletBalances.Add(senderWalletBalance);
+        }
+
+        // update temporary balance
+        if (senderWalletBalance is null || !TryDebit(senderWalletBalance, amount, allowDebt))
             throw new InsufficientBalanceException(
                 $"WalletId: {senderWalletId} does not have sufficient balance, amount is: {amount}");
+    }
 
-        ArgumentNullException.ThrowIfNull(senderWalletBalance);
-        if (senderWalletBalance.Balance >= amount)
-        {
-            // update temporary balance
-            walletBalances.Single(x => x.WalletId == senderWalletBalance.WalletId)
-                .Balance = senderWalletBalance.Balance - amount;
-        }
-        else
-        {
-            // update temporary balance
-            walletBalances.Single(x => x.WalletId == senderWalletBalance.WalletId)
-                .Balance = 0;
+    // A payment comes from the positive balance first, then the MinBalance credit line, and only a debt transfer
+    // (a debt order or a void) may put what is left into a negative balance. An existing debt is never paid from here.
+    private static bool TryDebit(WalletBalanceModel walletBalance, decimal amount, bool allowDebt) {
+        var fromBalance = Math.Clamp(walletBalance.Balance, 0, amount);
+        var fromMinBalance = Math.Min(amount - fromBalance, Math.Max(-walletBalance.MinBalance, 0));
+        var fromDebt = amount - fromBalance - fromMinBalance;
+        if (fromDebt > 0 && !allowDebt)
+            return false;
 
-            walletBalances.Single(x => x.WalletId == senderWalletBalance.WalletId)
-                .MinBalance = senderWalletBalance.MinBalance - (amount + senderWalletBalance.Balance);
-        }
-
-        return walletBalances;
+        walletBalance.Balance -= fromBalance + fromDebt;
+        walletBalance.MinBalance += fromMinBalance;
+        return true;
     }
 
     private async Task PreCalculateOrderItems(OrderModel order) {
@@ -154,18 +165,18 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         var walletIds = order.OrderItems.GetWalletIds();
         var walletBalances = await walletRepo.GetWalletBalancesWithoutTrack(order.AppId, order.CurrencyId, walletIds);
         foreach (var item in order.OrderItems)
-            PreCalculateOrderItem(walletBalances, item);
+            PreCalculateOrderItem(walletBalances, item, order.CurrencyId, order.AllowDebt);
     }
 
-    private void PreCalculateOrderItem(List<WalletBalanceModel> walletBalances, OrderItemModel item) {
+    private void PreCalculateOrderItem(List<WalletBalanceModel> walletBalances, OrderItemModel item, int currencyId, bool allowDebt) {
         var senderWalletBalance = walletBalances.SingleOrDefault(x => x.WalletId == item.SenderWalletId);
-        walletBalances = PreCalculateOrderItemSender(walletBalances, senderWalletBalance, item.SenderWalletId, item.Amount);
+        PreCalculateOrderItemSender(walletBalances, senderWalletBalance, item.SenderWalletId, currencyId, item.Amount, allowDebt);
 
         var receiverWalletBalance = walletBalances.SingleOrDefault(x => x.WalletId == item.ReceiverWalletId);
         PreCalculateOrderItemReceiver(walletBalances, receiverWalletBalance, item.ReceiverWalletId, item.Amount);
     }
 
-    private async Task Transfers(AppModel app, int currencyId, List<WalletTransferItem> items, bool forceTransfer = false) {
+    private async Task Transfers(AppModel app, int currencyId, List<WalletTransferItem> items) {
         ArgumentNullException.ThrowIfNull(app.SystemWalletId);
         var newWalletTransactionId = await BuildNewWalletTransactionId();
         var walletIds = GetWalletIds(items);
@@ -176,7 +187,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         {
             await Transfer(item.ParticipantTransferItem.SenderWalletId, item.ParticipantTransferItem.ReceiverWalletId,
                 item.ActualReceiverWalletId, item.ParticipantTransferItem.Amount, item.OrderItemId, newWalletTransactionId,
-                walletBalances, item.TransactionType, forceTransfer: forceTransfer);
+                walletBalances, item.TransactionType, allowDebt: item.AllowDebt);
 
             newWalletTransactionId += 2;
         }
@@ -201,11 +212,11 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     }
 
     private async Task Transfer(int senderWalletId, int receiverWalletId, int actualReceiverWalletId, decimal amount, long orderItemId,
-        long walletTransactionId, List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool forceTransfer = false) {
+        long walletTransactionId, List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool allowDebt = false) {
         // make sender transaction
         var senderWalletTransaction = CreateOrderTransaction(senderWalletId, actualReceiverWalletId, -amount,
             walletTransactionId, null, orderItemId,
-            walletBalances: walletBalances, transactionType: transactionType, forceTransfer: forceTransfer);
+            walletBalances: walletBalances, transactionType: transactionType, allowDebt: allowDebt);
         await walletRepo.AddEntity(senderWalletTransaction);
 
         // make receiver transaction
@@ -217,7 +228,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
 
     private WalletTransactionModel CreateOrderTransaction(int walletId, int receiverWalletId, decimal amount,
         long walletTransactionId, long? walletTransactionReferenceId, long orderItemId,
-        List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool forceTransfer = false) {
+        List<WalletBalanceModel> walletBalances, TransactionType? transactionType = null, bool allowDebt = false) {
         // get sender info
         var walletBalance = walletBalances.SingleOrDefault(x => x.WalletId == walletId);
 
@@ -227,53 +238,25 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         {
             case < 0:
                 {
-                    if (walletBalance is not null && walletBalance.Balance >= -amount)
+                    // a debt transfer may start from a wallet that has no balance yet
+                    if (walletBalance is null && allowDebt)
                     {
-                        newBalance = walletBalance.Balance - (-amount);
-
-                        // update cache
-                        walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                            .Balance = walletBalance.Balance + amount;
-                        break;
-                    }
-
-                    if (walletBalance is not null && walletBalance.Balance + (-walletBalance.MinBalance) >= -amount)
-                    {
-                        newBalance = 0;
-
-                        walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                            .MinBalance = walletBalance.MinBalance - (walletBalance.Balance + amount);
-
-                        // update cache
-                        walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                            .Balance = 0;
-
-                        walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                            .ModifiedTime = DateTime.UtcNow;
-                        break;
-                    }
-
-                    if (forceTransfer)
-                    {
-                        if (walletBalance is null)
+                        walletBalance = new WalletBalanceModel
                         {
-                            newBalance = amount;
-                            walletBalances.Add(new WalletBalanceModel
-                            {
-                                WalletId = walletId,
-                                CurrencyId = walletBalances.First().CurrencyId,
-                                MinBalance = 0,
-                                Balance = amount,
-                                ModifiedTime = DateTime.UtcNow
-                            });
-                            break;
-                        }
+                            WalletId = walletId,
+                            CurrencyId = walletBalances.First().CurrencyId,
+                            Balance = 0,
+                            MinBalance = 0,
+                            ModifiedTime = DateTime.UtcNow
+                        };
+                        walletBalances.Add(walletBalance);
+                    }
 
-                        newBalance = walletBalance.Balance - (-amount);
-
-                        // update cache
-                        walletBalances.Single(x => x.WalletBalanceId == walletBalance.WalletBalanceId)
-                            .Balance = walletBalance.Balance + amount;
+                    // update cache
+                    if (walletBalance is not null && TryDebit(walletBalance, -amount, allowDebt))
+                    {
+                        newBalance = walletBalance.Balance;
+                        walletBalance.ModifiedTime = DateTime.UtcNow;
                         break;
                     }
 
@@ -367,6 +350,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
             CreatedTime = DateTime.UtcNow,
             ModifiedTime = DateTime.UtcNow,
             TransactionType = request.TransactionType,
+            AllowDebt = request.AllowDebt ?? false,
             AuthorizedTime = request.TransactionType == TransactionType.Authorize ? DateTime.UtcNow : null,
             CapturedTime = request.TransactionType == TransactionType.Sale ? DateTime.UtcNow : null,
             ProcessTime = null
@@ -397,6 +381,10 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         // validate transaction type
         if (request.TransactionType != TransactionType.Authorize && request.TransactionType != TransactionType.Sale)
             throw new InvalidOperationException($"{request.TransactionType} does not accepted.");
+
+        // debt is limited to a single transfer so it can not spill over to other senders of the order
+        if (request.AllowDebt == true && request.ParticipantWallets.Count > 1)
+            throw new InvalidOperationException("AllowDebt is only supported for an order with a single participant transfer.");
 
         // Validate currency
         await walletRepo.GetCurrency(appId, request.CurrencyId);
@@ -452,6 +440,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
         if (order.CurrencyId == request.CurrencyId &&
                order.OrderTypeId == request.OrderTypeId &&
                order.TransactionType == request.TransactionType &&
+               order.AllowDebt == (request.AllowDebt ?? false) &&
                 orderParticipants.SequenceEqual(requestParticipants))
             return order;
         return null;
@@ -539,11 +528,13 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
                     Amount = item.Amount
                 },
                 TransactionType = null,
+                // a void must always succeed, so whatever the wallet can not pay back becomes debt
+                AllowDebt = true,
                 ActualReceiverWalletId = item.SenderWalletId,
                 OrderItemId = item.OrderItemId
             });
         }
-        await Transfers(order.App, order.CurrencyId, walletTransferItems, true);
+        await Transfers(order.App, order.CurrencyId, walletTransferItems);
 
         // update order
         order.ModifiedTime = DateTime.UtcNow;
