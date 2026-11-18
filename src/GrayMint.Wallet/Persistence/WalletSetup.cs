@@ -4,11 +4,21 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace GrayMint.Wallet.Persistence;
 
-// Makes the wallet's tables when they are not there, any number of times; and refuses a start on a database where a
-// table, or a check of theirs, is missing or off.
+// Makes the wallet's tables when they are not there, any number of times; and refuses a start on a database without
+// them.
 internal static class WalletSetup
 {
     private const int TableCount = 2;
+
+    // INFORMATION_SCHEMA is on both databases, and lists only the tables the login has a right on. Its names are in
+    // upper case, as SQL Server has them: a database whose collation tells case apart wouldn't find them in lower
+    // case, and PostgreSQL folds them to lower case either way.
+    private const string CountTablesSql =
+        $"""
+         SELECT CAST(COUNT(*) AS int) AS "Value" FROM INFORMATION_SCHEMA.TABLES
+         WHERE TABLE_SCHEMA = '{WalletDbContext.Schema}' AND TABLE_TYPE = 'BASE TABLE'
+           AND TABLE_NAME IN ('{WalletDbContext.AccountsTable}', '{WalletDbContext.TransfersTable}')
+         """;
 
     public static async Task Run(WalletDbContext walletDbContext, HostDatabase? hostDatabase,
         CancellationToken cancellationToken)
@@ -22,10 +32,9 @@ internal static class WalletSetup
                 await databaseCreator.CreateAsync(cancellationToken);
         }
 
-        var dialect = WalletDialect.For(walletDbContext.Database);
         await using (var session = await WalletSession.Begin(walletDbContext, hostDatabase, isWrite: true,
                          cancellationToken)) {
-            var tableCount = await Count(walletDbContext, dialect.CountTablesSql, cancellationToken);
+            var tableCount = await CountTables(walletDbContext, cancellationToken);
             if (tableCount == 0)
                 await walletDbContext.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(cancellationToken);
             else if (tableCount != TableCount)
@@ -39,25 +48,18 @@ internal static class WalletSetup
         await ThrowIfIncomplete(walletDbContext, hostDatabase, cancellationToken);
     }
 
-    // A database whose checks were dropped or switched off would hold the money without them and say nothing.
+    // so a host that never ran the setup stops at its start, not at its first call
     public static async Task ThrowIfIncomplete(WalletDbContext walletDbContext, HostDatabase? hostDatabase,
         CancellationToken cancellationToken)
     {
         ThrowIfRetrying(walletDbContext);
-        var dialect = WalletDialect.For(walletDbContext.Database);
         await using var session = await WalletSession.Begin(walletDbContext, hostDatabase, isWrite: false,
             cancellationToken);
 
-        if (await Count(walletDbContext, dialect.CountTablesSql, cancellationToken) != TableCount)
+        if (await CountTables(walletDbContext, cancellationToken) != TableCount)
             throw new InvalidOperationException(
-                $"The wallet's tables are not in the schema {WalletDbContext.Schema}: run the wallet's setup " +
-                "(UseGrayMintWallet).");
-
-        if (await Count(walletDbContext, dialect.CountTrustedChecksSql, cancellationToken) !=
-            WalletDbContext.Checks.Count)
-            throw new InvalidOperationException(
-                "A check of the wallet's tables is missing, switched off or not trusted, so the database no longer " +
-                "holds the money to its rules on its own.");
+                $"The wallet's tables are not in the schema {WalletDbContext.Schema}, or this login has no right on " +
+                "them. The wallet's setup (UseGrayMintWallet) makes them.");
     }
 
     // A strategy that retries on failure refuses a transaction begun outside it, so every call that writes would
@@ -70,8 +72,8 @@ internal static class WalletSetup
                 "calls run in. Leave it out of the wallet's options and retry a whole call: its keys make that safe.");
     }
 
-    private static Task<int> Count(WalletDbContext walletDbContext, string sql, CancellationToken cancellationToken)
+    private static Task<int> CountTables(WalletDbContext walletDbContext, CancellationToken cancellationToken)
     {
-        return walletDbContext.Database.SqlQueryRaw<int>(sql).SingleAsync(cancellationToken);
+        return walletDbContext.Database.SqlQueryRaw<int>(CountTablesSql).SingleAsync(cancellationToken);
     }
 }

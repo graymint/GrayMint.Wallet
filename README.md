@@ -52,7 +52,7 @@ login that may make tables; it can run any number of times:
 await app.Services.UseGrayMintWallet(cancellationToken);
 ```
 
-The host refuses to start on a database whose wallet tables, or their checks, are missing or switched off.
+The host refuses to start on a database without the wallet's tables.
 
 Move money in the host's own transaction:
 

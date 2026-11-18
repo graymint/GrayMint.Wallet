@@ -6,7 +6,7 @@ For whoever runs the server, `GrayMint.Wallet.Server`, or a host that embeds the
 
 - `AddGrayMintWallet()` registers the service, and `AddGrayMintWalletDb` its context: on the host's connection,
   to run in the host's transactions, or on a connection of its own (the README shows both). The host doesn't
-  start on a database whose wallet tables, or their checks, are missing or switched off.
+  start on a database without the wallet's tables.
 - The host's setup runs `UseGrayMintWallet()`, with a login that may make tables. It makes the schema `gmwallet`
   and the wallet's tables when they are not there; it can run any number of times. On a connection of its own it
   makes the database too.

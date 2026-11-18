@@ -28,10 +28,10 @@ makes them wrong.
    case runs on both (`[EveryDatabase]`), each in a database of its own, made as the setup makes it. Run them
    after every change; a change isn't done until they pass.
 7. **One model for both databases.** Whatever EF can say goes through EF. What the two databases say
-   differently (a row lock, a catalog query) goes in `WalletDialect`, one class for each, and comes
-   with a test that runs on both. The package names no database provider: the host names its own.
+   differently (a row lock, the time a new row gets, a collation) goes in `WalletDialect`, and comes with a test
+   that runs on both. The package names no database provider: the host names its own.
 8. **Fail loudly.** A setting that is missing or wrong stops the start, not the first request; so does a
-   database whose wallet tables lack their guards. No error is caught just to go on.
+   database without the wallet's tables. No error is caught just to go on.
 9. **.NET 10**, pinned by `global.json`, until the PostgreSQL provider for the next EF Core is released.
 
 ## Code

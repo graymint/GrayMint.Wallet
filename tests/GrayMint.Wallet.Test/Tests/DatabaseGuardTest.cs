@@ -12,13 +12,6 @@ namespace GrayMint.Wallet.Test.Tests;
 [TestClass]
 public class DatabaseGuardTest(TestContext testContext)
 {
-    private const string DroppedCheck = "ALTER TABLE gmwallet.\"Accounts\" DROP CONSTRAINT \"CK_Accounts_MinBalance\"";
-
-    // the limit's check gone from the accounts, and one of its name on the transfers in its place
-    private const string MovedCheck =
-        DroppedCheck + "; " +
-        "ALTER TABLE gmwallet.\"Transfers\" ADD CONSTRAINT \"CK_Accounts_MinBalance\" CHECK (\"Amount\" > 0)";
-
     private CancellationToken CancellationToken => testContext.CancellationToken;
 
     [TestMethod, EveryDatabase]
@@ -73,23 +66,6 @@ public class DatabaseGuardTest(TestContext testContext)
         Assert.Contains(WalletDbContext.TransferTypeCheck, noPending.Message);
     }
 
-    [TestMethod, EveryDatabase]
-    public async Task WalletRefusesADatabaseWithoutItsGuards(WalletDatabaseProvider provider)
-    {
-        await using (var complete = await TestWallet.Create(provider, CancellationToken)) {
-            await using var completeDbContext = complete.CreateDbContext();
-            await WalletSetup.ThrowIfIncomplete(completeDbContext, null, CancellationToken);
-        }
-
-        foreach (var sql in SwitchOffs(provider)) {
-            await using var wallet = await TestWallet.Create(provider, CancellationToken);
-            await wallet.Execute(sql, CancellationToken);
-            await using var dbContext = wallet.CreateDbContext();
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-                WalletSetup.ThrowIfIncomplete(dbContext, null, CancellationToken), sql);
-        }
-    }
-
     // tables the setup didn't make as they are: it would only make things worse
     [TestMethod, EveryDatabase]
     public async Task SetupRefusesADatabaseWithSomeOfTheTables(WalletDatabaseProvider provider)
@@ -106,34 +82,21 @@ public class DatabaseGuardTest(TestContext testContext)
             CancellationToken));
     }
 
+    // a host that never ran the setup stops at its start, not at its first call
     [TestMethod, EveryDatabase]
-    public async Task HostDoesNotStartOnADatabaseWithoutTheGuards(WalletDatabaseProvider provider)
+    public async Task HostDoesNotStartOnADatabaseWithoutTheTables(WalletDatabaseProvider provider)
     {
-        await using var withoutCheck = await TestWallet.Create(provider, CancellationToken);
-        await withoutCheck.Execute(DroppedCheck, CancellationToken);
-        using var refused = BuildHost(withoutCheck);
-        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => refused.StartAsync(CancellationToken));
+        await using var withoutTable = await TestWallet.Create(provider, CancellationToken);
+        await withoutTable.Execute("DROP TABLE gmwallet.\"Transfers\"", CancellationToken);
+        using var refused = BuildHost(withoutTable);
+        var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            refused.StartAsync(CancellationToken));
+        Assert.Contains("UseGrayMintWallet", exception.Message);
 
         await using var complete = await TestWallet.Create(provider, CancellationToken);
         using var started = BuildHost(complete);
         await started.StartAsync(CancellationToken);
         await started.StopAsync(CancellationToken);
-    }
-
-    private static IReadOnlyList<string> SwitchOffs(WalletDatabaseProvider provider)
-    {
-        return provider == WalletDatabaseProvider.PostgreSql
-            ? [
-                DroppedCheck,
-                MovedCheck,
-                "ALTER TABLE gmwallet.\"Transfers\" DROP CONSTRAINT \"CK_Transfers_Amount\"; " +
-                "ALTER TABLE gmwallet.\"Transfers\" ADD CONSTRAINT \"CK_Transfers_Amount\" CHECK (\"Amount\" > 0) NOT VALID"
-            ]
-            : [
-                DroppedCheck,
-                MovedCheck,
-                "ALTER TABLE gmwallet.\"Transfers\" NOCHECK CONSTRAINT \"CK_Transfers_Amount\""
-            ];
     }
 
     // A strategy that retries refuses the transactions the wallet's calls run in, so every write would fail:

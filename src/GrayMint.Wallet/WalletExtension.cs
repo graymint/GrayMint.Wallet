@@ -9,8 +9,7 @@ public static class WalletExtension
 {
     extension(IServiceCollection services)
     {
-        // The wallet's service. The host doesn't start on a database whose wallet tables, or their checks, are
-        // missing or off.
+        // The wallet's service. The host doesn't start on a database without the wallet's tables.
         public IServiceCollection AddGrayMintWallet()
         {
             services.AddScoped(serviceProvider => new WalletService(

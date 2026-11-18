@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GrayMint.Wallet.Persistence;
 
 // The wallet's own tables, in a schema of their own beside the host's. It has no migrations: the setup makes the
-// tables from this model and puts beside them what the model can't say (WalletExtension.UseGrayMintWallet).
+// tables from this model (WalletExtension.UseGrayMintWallet).
 public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbContext(options)
 {
     public const string Schema = "gmwallet";
@@ -18,11 +18,6 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
     internal const string TransferAmountCheck = "CK_Transfers_Amount";
     internal const string TransferAccountsCheck = "CK_Transfers_Accounts";
     internal const string TransferTypeCheck = "CK_Transfers_Type";
-
-    internal static readonly IReadOnlyList<string> AccountChecks = [AccountTotalsCheck, AccountMinBalanceCheck];
-    internal static readonly IReadOnlyList<string> TransferChecks =
-        [TransferAmountCheck, TransferAccountsCheck, TransferTypeCheck];
-    internal static readonly IReadOnlyList<string> Checks = [.. AccountChecks, .. TransferChecks];
 
     private const int AmountPrecision = 28;
 

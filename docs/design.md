@@ -101,8 +101,8 @@ so a fault in the code, or a write that goes round it, can't break them:
 - **Unique indexes**: one key for each ledger, one settlement for each pending transfer, one account for each
   ledger, owner, code and currency.
 
-The model gives all of them. At the host's start, the wallet checks that its tables are there and that its checks
-are there, each on its own table, and trusted; the host doesn't start otherwise.
+The model gives all of them, and the setup makes them with the tables. At the host's start, the wallet checks that
+its tables are there; the host doesn't start otherwise.
 
 The database holds that a post or a void names a pending transfer of its own ledger, not that it copies that
 transfer's accounts and amount: the service copies them, and a writer that goes round the service could as well
@@ -110,9 +110,10 @@ write any transfer that looks right, which no key of the database tells apart.
 
 ## Two databases
 
-Everything but two things goes through EF, which says it in each database's own way. The two are in
-`WalletDialect`, one class for each database: the row lock, and the catalog queries the start uses to find the
-tables and their checks. Each case of the tests runs on both.
+Everything but three things goes through EF, which says it in each database's own way. The three are in
+`WalletDialect`, for each database: the row lock, the time a new row gets, and the collation that makes SQL Server
+tell case apart. The start finds the tables through `INFORMATION_SCHEMA`, which both databases have. Each case of
+the tests runs on both.
 
 ## Reconciliation
 
@@ -152,3 +153,6 @@ that every address asks for. The server takes no request from a browser, so it s
 - **No trigger refuses a change to a transfer.** The service never changes or deletes one, and a writer that goes
   round the service could as well insert a transfer or change the totals, which no trigger stops. Reconciliation
   finds a transfer changed or deleted on its own, as its accounts' totals no longer add up.
+- **The start doesn't look at the checks.** The setup makes them with the tables. Dropping one or switching it off
+  takes the right to alter the tables, and whoever has it can as well change any row; the checks are there for a
+  fault in the code or a careless write, neither of which can switch them off.
