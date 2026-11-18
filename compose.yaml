@@ -1,0 +1,52 @@
+# What the tests and development need beside the code: the two databases the wallet runs on.
+name: graymint-wallet
+
+services:
+  # Port 5436 lets it run beside other PostgreSQL servers, and it listens on this machine only, since its
+  # password is public.
+  postgres:
+    image: postgres:18
+    container_name: graymint-wallet-postgres
+    # tests run side by side, and some of them make dozens of payments at once
+    command: ["postgres", "-c", "max_connections=500"]
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5436:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    # by TCP: while the first start sets the database up, the server takes the socket only, and then restarts.
+    # CI starts this file with `--wait`, which runs the tests once this says healthy.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 1s
+
+  # Port 14336 lets it run beside another SQL Server on 1433, and it listens on this machine only, since its
+  # password is public.
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    container_name: graymint-wallet-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: GrayMint-Wallet-2026
+    ports:
+      - "127.0.0.1:14336:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    # it takes a while to start, and answers only once it has
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S 127.0.0.1 -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+      start_interval: 2s
+
+volumes:
+  postgres-data:
+  sqlserver-data:

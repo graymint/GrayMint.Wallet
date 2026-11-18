@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    Shared settings for everything under tests/. This file also stops MSBuild's upward search, so
+    test projects inherit no pack metadata from src/: they are never packed or versioned.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+</Project>

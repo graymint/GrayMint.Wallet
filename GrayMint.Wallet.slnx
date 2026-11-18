@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="CLAUDE.md" />
+    <File Path="compose.yaml" />
+    <File Path="docs/deployment.md" />
+    <File Path="docs/design.md" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+    <File Path="src/Directory.Build.props" />
+    <File Path="src/Directory.Build.targets" />
+    <File Path="tests/Directory.Build.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/GrayMint.Wallet/GrayMint.Wallet.csproj" />
+    <Project Path="src/GrayMint.Wallet.Server/GrayMint.Wallet.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GrayMint.Wallet.Test/GrayMint.Wallet.Test.csproj" />
+  </Folder>
+</Solution>
