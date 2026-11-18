@@ -2,8 +2,8 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace GrayMint.Wallet.Persistence;
 
-// What the two databases the wallet runs on say differently: a row lock, the guards a model can't hold, and where
-// the database lists them. Everything else goes through EF, which says it for each.
+// What the two databases the wallet runs on say differently: a row lock, and where the database lists the wallet's
+// tables and checks. Everything else goes through EF, which says it for each.
 internal abstract class WalletDialect
 {
     private const string PostgreSqlProvider = "Npgsql.EntityFrameworkCore.PostgreSQL";
@@ -23,14 +23,8 @@ internal abstract class WalletDialect
     // the ledger, {1} the account.
     public abstract string LockAccountSql { get; }
 
-    // What the model can't say: a transfer is never changed or deleted. Each statement runs on its own and can run
-    // any number of times.
-    public abstract IReadOnlyList<string> GuardStatements { get; }
-    public abstract IReadOnlyList<string> Triggers { get; }
-
     // each gives one count as "Value"
     public abstract string CountTablesSql { get; }
-    public abstract string CountEnabledTriggersSql { get; }
     public abstract string CountTrustedChecksSql { get; }
 
     public static WalletDialect For(DatabaseFacade database)

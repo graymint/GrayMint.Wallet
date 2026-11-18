@@ -14,9 +14,10 @@ makes them wrong.
    a check of the database, a permission) gets a test that fails when the guard is switched off. A test that
    stays green with its guard off proves nothing. Where two guards stop the same thing, as the service's limit
    check and the database's, each gets a test the other can't pass for it.
-3. **A transfer is never changed or deleted.** No code updates or deletes a row of `Transfers`, and the
-   database refuses it for every role. A mistake is put right by a transfer the other way. A pending transfer
-   is settled by a second row, its post or its void.
+3. **A transfer is never changed or deleted.** No code updates or deletes a row of `Transfers`. A mistake is put
+   right by a transfer the other way. A pending transfer is settled by a second row, its post or its void. No
+   trigger enforces it in the database: a writer that goes round the service could do worse, and reconciliation
+   finds a transfer changed or deleted on its own.
 4. **The totals move only under the account's lock.** Every write locks its accounts first, one by one in id
    order, in the host's transaction or one of its own, and adds its change to what the database holds. A write
    inside a transaction it did not begin takes a savepoint, so a refusal takes back all it wrote. The context is
@@ -27,7 +28,7 @@ makes them wrong.
    case runs on both (`[EveryDatabase]`), each in a database of its own, made as the setup makes it. Run them
    after every change; a change isn't done until they pass.
 7. **One model for both databases.** Whatever EF can say goes through EF. What the two databases say
-   differently (a row lock, a trigger, a catalog query) goes in `WalletDialect`, one class for each, and comes
+   differently (a row lock, a catalog query) goes in `WalletDialect`, one class for each, and comes
    with a test that runs on both. The package names no database provider: the host names its own.
 8. **Fail loudly.** A setting that is missing or wrong stops the start, not the first request; so does a
    database whose wallet tables lack their guards. No error is caught just to go on.

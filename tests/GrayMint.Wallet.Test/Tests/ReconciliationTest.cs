@@ -88,4 +88,31 @@ public class ReconciliationTest(TestContext testContext)
         Assert.AreEqual(10m, mismatches[0].FromTransfers.CreditsPosted);
         Assert.AreEqual(4m, mismatches[0].FromTransfers.CreditsPending);
     }
+
+    // Nothing in the database stops a transfer from being changed or deleted behind the service's back
+    // (docs/design.md): this search is what finds one, as its accounts' totals no longer add up.
+    [TestMethod, EveryDatabase]
+    public async Task TransferChangedOrDeletedBehindTheServiceIsFound(WalletDatabaseProvider provider)
+    {
+        await using var wallet = await TestWallet.Create(provider, CancellationToken);
+        var source = await wallet.CreateSource(CancellationToken);
+        var changed = await wallet.CreateAccount("changed", 0, CancellationToken);
+        var deleted = await wallet.CreateAccount("deleted", 0, CancellationToken);
+        await wallet.Transfer(CancellationToken,
+            TestWallet.Request(source, changed, 10),
+            TestWallet.Request(source, deleted, 5));
+        await wallet.Execute(
+            $"UPDATE gmwallet.\"Transfers\" SET \"Amount\" = 1 WHERE \"CreditAccountId\" = {changed.AccountId}",
+            CancellationToken);
+        await wallet.Execute(
+            $"DELETE FROM gmwallet.\"Transfers\" WHERE \"CreditAccountId\" = {deleted.AccountId}",
+            CancellationToken);
+
+        await using var dbContext = wallet.CreateDbContext();
+        var mismatches = await TestWallet.CreateService(dbContext).FindTotalsMismatches(CancellationToken);
+        CollectionAssert.AreEquivalent(new[] { source.AccountId, changed.AccountId, deleted.AccountId },
+            mismatches.Select(x => x.AccountId).ToArray());
+        Assert.AreEqual(1m, mismatches.Single(x => x.AccountId == changed.AccountId).FromTransfers.CreditsPosted);
+        Assert.AreEqual(0m, mismatches.Single(x => x.AccountId == deleted.AccountId).FromTransfers.CreditsPosted);
+    }
 }

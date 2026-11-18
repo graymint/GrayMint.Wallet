@@ -32,9 +32,8 @@ refused, as SQL Server would not tell `a` from `a `.
 ## Its own context, and the host's transaction
 
 The wallet has a context of its own, `WalletDbContext`, whose tables are in the schema `gmwallet`. It has no
-migrations: the setup (`UseGrayMintWallet`) makes the tables from its model when none of them is there, and puts
-on them what the model can't say (the triggers below). It runs any number of times and puts back a trigger that
-was dropped or switched off. A database with only some of the tables is refused, and nothing is changed in it.
+migrations: the setup (`UseGrayMintWallet`) makes the tables from its model when none of them is there, and runs
+any number of times. A database with only some of the tables is refused, and nothing is changed in it.
 
 A host registers the context one of two ways:
 
@@ -101,14 +100,9 @@ so a fault in the code, or a write that goes round it, can't break them:
   currency, and a settlement names its pending transfer together with its ledger, so money can't cross either.
 - **Unique indexes**: one key for each ledger, one settlement for each pending transfer, one account for each
   ledger, owner, code and currency.
-- **Triggers**: a transfer is never updated or deleted, by any role, its owner included. On PostgreSQL a second
-  trigger refuses to empty the table, as `TRUNCATE` passes row triggers by. SQL Server has no trigger for
-  `TRUNCATE TABLE`, which there needs the right to alter the table, a right the wallet's login never needs.
-  Dropping a table, or a trigger, is a change of the schema, which only the owner of the tables can make.
 
-The model gives the checks, keys and indexes; the setup makes the triggers. At the host's start, the wallet
-checks that its tables are there, its triggers are there and on for every session, and its checks are there, each
-on its own table, and trusted; the host doesn't start otherwise.
+The model gives all of them. At the host's start, the wallet checks that its tables are there and that its checks
+are there, each on its own table, and trusted; the host doesn't start otherwise.
 
 The database holds that a post or a void names a pending transfer of its own ledger, not that it copies that
 transfer's accounts and amount: the service copies them, and a writer that goes round the service could as well
@@ -116,9 +110,9 @@ write any transfer that looks right, which no key of the database tells apart.
 
 ## Two databases
 
-Everything but three things goes through EF, which says it in each database's own way. The three are in
-`WalletDialect`, one class for each database: the row lock, the triggers, and the queries of the database's
-catalog that the start checks them by. Each case of the tests runs on both.
+Everything but two things goes through EF, which says it in each database's own way. The two are in
+`WalletDialect`, one class for each database: the row lock, and the catalog queries the start uses to find the
+tables and their checks. Each case of the tests runs on both.
 
 ## Reconciliation
 
@@ -155,3 +149,6 @@ that every address asks for. The server takes no request from a browser, so it s
   the ones it no longer wants.
 - **No database provider in the package.** The host names its own, so a host on PostgreSQL carries nothing of
   SQL Server's, and the other way round.
+- **No trigger refuses a change to a transfer.** The service never changes or deletes one, and a writer that goes
+  round the service could as well insert a transfer or change the totals, which no trigger stops. Reconciliation
+  finds a transfer changed or deleted on its own, as its accounts' totals no longer add up.

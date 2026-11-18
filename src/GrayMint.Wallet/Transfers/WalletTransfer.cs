@@ -1,7 +1,7 @@
 namespace GrayMint.Wallet.Transfers;
 
-// A transfer is never changed or deleted once written; the database refuses both. A mistake is put right by a
-// transfer the other way, and a pending one is settled by a second row, its post or its void.
+// A transfer is never changed or deleted once written. A mistake is put right by a transfer the other way, and a
+// pending one is settled by a second row, its post or its void.
 public class WalletTransfer
 {
     public long TransferId { get; init; }

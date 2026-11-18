@@ -9,7 +9,7 @@ public static class WalletExtension
 {
     extension(IServiceCollection services)
     {
-        // The wallet's service. The host doesn't start on a database whose wallet tables, or their guards, are
+        // The wallet's service. The host doesn't start on a database whose wallet tables, or their checks, are
         // missing or off.
         public IServiceCollection AddGrayMintWallet()
         {
@@ -43,8 +43,8 @@ public static class WalletExtension
         }
     }
 
-    // Makes the wallet's tables when they are not there and puts their guards on them; it can run any number of
-    // times, and needs a login that may make tables. On a connection of its own it makes the database too.
+    // Makes the wallet's tables when they are not there; it can run any number of times, and needs a login that may
+    // make tables. On a connection of its own it makes the database too.
     public static async Task<IServiceProvider> UseGrayMintWallet(this IServiceProvider serviceProvider,
         CancellationToken cancellationToken)
     {

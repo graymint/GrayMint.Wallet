@@ -6,12 +6,11 @@ For whoever runs the server, `GrayMint.Wallet.Server`, or a host that embeds the
 
 - `AddGrayMintWallet()` registers the service, and `AddGrayMintWalletDb` its context: on the host's connection,
   to run in the host's transactions, or on a connection of its own (the README shows both). The host doesn't
-  start on a database whose wallet tables, or their guards, are missing or switched off.
+  start on a database whose wallet tables, or their checks, are missing or switched off.
 - The host's setup runs `UseGrayMintWallet()`, with a login that may make tables. It makes the schema `gmwallet`
-  and the wallet's tables when they are not there, and puts their triggers on them; it can run any number of
-  times. On a connection of its own it makes the database too.
-- The login the host runs with needs to read, insert and update the wallet's rows, and nothing more. Give it no
-  right to alter the tables: on SQL Server that right would let it empty `Transfers`.
+  and the wallet's tables when they are not there; it can run any number of times. On a connection of its own it
+  makes the database too.
+- The login the host runs with needs to read, insert and update the wallet's rows, and nothing more.
 - Give the wallet's context no strategy that retries on failure (`EnableRetryOnFailure`): the start refuses one.
   Retry a whole call instead; its keys make that safe.
 - On SQL Server, leave `XACT_ABORT` off, as SQL Server has it, or a call the database refuses ends the host's
@@ -45,8 +44,7 @@ setup alone uses, and a login for the server that may read and write rows and no
 
     GrayMint.Wallet.Server setup --ConnectionStrings:WalletDatabase="..." --WalletServer:DatabaseProvider=PostgreSql
 
-It makes the database and the tables when they are not there, puts their triggers on them, and can run any
-number of times.
+It makes the database and the tables when they are not there, and can run any number of times.
 
 ### Calling it
 

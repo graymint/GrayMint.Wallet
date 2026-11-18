@@ -12,31 +12,14 @@ namespace GrayMint.Wallet.Test.Tests;
 [TestClass]
 public class DatabaseGuardTest(TestContext testContext)
 {
+    private const string DroppedCheck = "ALTER TABLE gmwallet.\"Accounts\" DROP CONSTRAINT \"CK_Accounts_MinBalance\"";
+
+    // the limit's check gone from the accounts, and one of its name on the transfers in its place
+    private const string MovedCheck =
+        DroppedCheck + "; " +
+        "ALTER TABLE gmwallet.\"Transfers\" ADD CONSTRAINT \"CK_Accounts_MinBalance\" CHECK (\"Amount\" > 0)";
+
     private CancellationToken CancellationToken => testContext.CancellationToken;
-
-    [TestMethod, EveryDatabase]
-    public async Task TransferIsNeverChangedDeletedOrEmptied(WalletDatabaseProvider provider)
-    {
-        await using var wallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await wallet.CreateSource(CancellationToken);
-        var account = await wallet.CreateAccount("owner", 0, CancellationToken);
-        await wallet.Transfer(CancellationToken, TestWallet.Request(source, account, 10));
-
-        // SQL Server has no trigger for TRUNCATE TABLE, which needs the right to alter the table (docs/deployment.md)
-        var statements = new List<string> {
-            "UPDATE gmwallet.\"Transfers\" SET \"Amount\" = 1",
-            "DELETE FROM gmwallet.\"Transfers\""
-        };
-        if (provider == WalletDatabaseProvider.PostgreSql)
-            statements.Add("TRUNCATE gmwallet.\"Transfers\" CASCADE");
-
-        foreach (var sql in statements) {
-            var exception = await Assert.ThrowsAsync<DbException>(() => wallet.Execute(sql, CancellationToken), sql);
-            Assert.Contains("never changed or deleted", exception.Message);
-        }
-
-        Assert.AreEqual(1L, await wallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\" WHERE \"Amount\" = 10", CancellationToken));
-    }
 
     [TestMethod, EveryDatabase]
     public async Task DatabaseHoldsAnAccountToItsLimit(WalletDatabaseProvider provider)
@@ -107,21 +90,6 @@ public class DatabaseGuardTest(TestContext testContext)
         }
     }
 
-    // the setup can run again, and puts back a trigger that was dropped or switched off
-    [TestMethod, EveryDatabase]
-    public async Task SetupPutsTheTriggersBack(WalletDatabaseProvider provider)
-    {
-        var triggerSwitchOffs = SwitchOffs(provider).Where(x => x.Contains("TRIGGER")).ToArray();
-        Assert.IsNotEmpty(triggerSwitchOffs);
-        foreach (var sql in triggerSwitchOffs) {
-            await using var wallet = await TestWallet.Create(provider, CancellationToken);
-            await wallet.Execute(sql, CancellationToken);
-            await using var dbContext = wallet.CreateDbContext();
-            await WalletSetup.Run(dbContext, null, CancellationToken);
-            await WalletSetup.ThrowIfIncomplete(dbContext, null, CancellationToken);
-        }
-    }
-
     // tables the setup didn't make as they are: it would only make things worse
     [TestMethod, EveryDatabase]
     public async Task SetupRefusesADatabaseWithSomeOfTheTables(WalletDatabaseProvider provider)
@@ -141,8 +109,9 @@ public class DatabaseGuardTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task HostDoesNotStartOnADatabaseWithoutTheGuards(WalletDatabaseProvider provider)
     {
-        await using var withoutGuards = await TestWallet.CreateWithoutGuards(provider, CancellationToken);
-        using var refused = BuildHost(withoutGuards);
+        await using var withoutCheck = await TestWallet.Create(provider, CancellationToken);
+        await withoutCheck.Execute(DroppedCheck, CancellationToken);
+        using var refused = BuildHost(withoutCheck);
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => refused.StartAsync(CancellationToken));
 
         await using var complete = await TestWallet.Create(provider, CancellationToken);
@@ -151,29 +120,19 @@ public class DatabaseGuardTest(TestContext testContext)
         await started.StopAsync(CancellationToken);
     }
 
-    // the limit's check gone from the accounts, and one of its name on the transfers in its place
-    private const string MovedCheck =
-        "ALTER TABLE gmwallet.\"Accounts\" DROP CONSTRAINT \"CK_Accounts_MinBalance\"; " +
-        "ALTER TABLE gmwallet.\"Transfers\" ADD CONSTRAINT \"CK_Accounts_MinBalance\" CHECK (\"Amount\" > 0)";
-
     private static IReadOnlyList<string> SwitchOffs(WalletDatabaseProvider provider)
     {
         return provider == WalletDatabaseProvider.PostgreSql
             ? [
-                "DROP TRIGGER refuse_row_change ON gmwallet.\"Transfers\"",
-                "ALTER TABLE gmwallet.\"Transfers\" DISABLE TRIGGER refuse_truncate",
-                "ALTER TABLE gmwallet.\"Transfers\" ENABLE REPLICA TRIGGER refuse_row_change",
+                DroppedCheck,
                 MovedCheck,
-                "ALTER TABLE gmwallet.\"Accounts\" DROP CONSTRAINT \"CK_Accounts_MinBalance\"",
                 "ALTER TABLE gmwallet.\"Transfers\" DROP CONSTRAINT \"CK_Transfers_Amount\"; " +
                 "ALTER TABLE gmwallet.\"Transfers\" ADD CONSTRAINT \"CK_Transfers_Amount\" CHECK (\"Amount\" > 0) NOT VALID"
             ]
             : [
-                "DROP TRIGGER gmwallet.refuse_transfer_change",
-                "DISABLE TRIGGER gmwallet.refuse_transfer_change ON gmwallet.\"Transfers\"",
-                "ALTER TABLE gmwallet.\"Accounts\" DROP CONSTRAINT \"CK_Accounts_MinBalance\"",
-                "ALTER TABLE gmwallet.\"Transfers\" NOCHECK CONSTRAINT \"CK_Transfers_Amount\"",
-                MovedCheck
+                DroppedCheck,
+                MovedCheck,
+                "ALTER TABLE gmwallet.\"Transfers\" NOCHECK CONSTRAINT \"CK_Transfers_Amount\""
             ];
     }
 

@@ -4,7 +4,6 @@ internal sealed class SqlServerWalletDialect : WalletDialect
 {
     private const string Schema = WalletDbContext.Schema;
     private const string Transfers = WalletDbContext.TransfersTable;
-    private const string ChangeTrigger = "refuse_transfer_change";
 
     public override string UtcNowSql => "SYSUTCDATETIME()";
 
@@ -18,37 +17,11 @@ internal sealed class SqlServerWalletDialect : WalletDialect
           WHERE [LedgerId] = {0} AND [AccountId] = {1}
           """;
 
-    // SQL Server has no trigger for TRUNCATE TABLE: emptying a table needs the right to alter it, which the
-    // wallet's login never needs (docs/deployment.md).
-    public override IReadOnlyList<string> GuardStatements { get; } = [
-        $"""
-         CREATE OR ALTER TRIGGER [{Schema}].[{ChangeTrigger}] ON [{Schema}].[{Transfers}]
-         AFTER UPDATE, DELETE
-         AS
-         BEGIN
-             SET NOCOUNT ON;
-             THROW 50000, N'A wallet transfer is never changed or deleted: a transfer the other way puts it right.', 1;
-         END
-         """,
-        $"ENABLE TRIGGER [{Schema}].[{ChangeTrigger}] ON [{Schema}].[{Transfers}]"
-    ];
-
-    public override IReadOnlyList<string> Triggers { get; } = [ChangeTrigger];
-
     public override string CountTablesSql =>
         $"""
          SELECT COUNT(*) AS [Value] FROM sys.tables t
          JOIN sys.schemas s ON s.schema_id = t.schema_id
          WHERE s.name = N'{Schema}' AND t.name IN (N'{WalletDbContext.AccountsTable}', N'{Transfers}')
-         """;
-
-    public override string CountEnabledTriggersSql =>
-        $"""
-         SELECT COUNT(*) AS [Value] FROM sys.triggers tr
-         JOIN sys.tables t ON t.object_id = tr.parent_id
-         JOIN sys.schemas s ON s.schema_id = t.schema_id
-         WHERE s.name = N'{Schema}' AND t.name = N'{Transfers}' AND tr.name IN ({ToSqlList(Triggers)})
-           AND tr.is_disabled = 0
          """;
 
     public override string CountTrustedChecksSql =>

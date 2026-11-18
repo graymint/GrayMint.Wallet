@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace GrayMint.Wallet.Persistence;
 
-// Makes the wallet's tables when they are not there and puts its guards on them, any number of times; and refuses
-// a start on a database where any of them is missing or off.
+// Makes the wallet's tables when they are not there, any number of times; and refuses a start on a database where a
+// table, or a check of theirs, is missing or off.
 internal static class WalletSetup
 {
     private const int TableCount = 2;
@@ -33,16 +33,13 @@ internal static class WalletSetup
                     $"Only some of the wallet's tables are in the schema {WalletDbContext.Schema}, and the setup " +
                     "doesn't know how they came to be so. It changed nothing.");
 
-            foreach (var statement in dialect.GuardStatements)
-                await walletDbContext.Database.ExecuteSqlRawAsync(statement, cancellationToken);
-
             await session.Commit(cancellationToken);
         }
 
         await ThrowIfIncomplete(walletDbContext, hostDatabase, cancellationToken);
     }
 
-    // A database whose guards were dropped or switched off would hold the money without them and say nothing.
+    // A database whose checks were dropped or switched off would hold the money without them and say nothing.
     public static async Task ThrowIfIncomplete(WalletDbContext walletDbContext, HostDatabase? hostDatabase,
         CancellationToken cancellationToken)
     {
@@ -55,11 +52,6 @@ internal static class WalletSetup
             throw new InvalidOperationException(
                 $"The wallet's tables are not in the schema {WalletDbContext.Schema}: run the wallet's setup " +
                 "(UseGrayMintWallet).");
-
-        if (await Count(walletDbContext, dialect.CountEnabledTriggersSql, cancellationToken) != dialect.Triggers.Count)
-            throw new InvalidOperationException(
-                "The wallet's transfers can be changed or deleted: a trigger of theirs is missing or off. The " +
-                "wallet's setup puts it back.");
 
         if (await Count(walletDbContext, dialect.CountTrustedChecksSql, cancellationToken) !=
             WalletDbContext.Checks.Count)

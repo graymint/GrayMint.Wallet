@@ -47,16 +47,6 @@ public sealed class TestWallet : IAsyncDisposable
         return new TestWallet(provider);
     }
 
-    // the model's tables without the guards, as a database whose guards were dropped
-    public static async Task<TestWallet> CreateWithoutGuards(WalletDatabaseProvider provider,
-        CancellationToken cancellationToken)
-    {
-        var testWallet = new TestWallet(provider);
-        await using var dbContext = testWallet.CreateDbContext();
-        await dbContext.Database.EnsureCreatedAsync(cancellationToken);
-        return testWallet;
-    }
-
     public WalletDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<WalletDbContext>();
