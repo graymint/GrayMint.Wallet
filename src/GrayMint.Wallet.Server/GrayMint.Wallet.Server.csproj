@@ -5,15 +5,32 @@
 		<IsPackable>false</IsPackable>
 	</PropertyGroup>
 
+	<!-- The API's description is read from the doc comments, so they ship beside the server, with the packages' own.
+	     Only what the API shows needs one: ApiDescriptionTest checks it, not the compiler (CS1591), and an action's
+	     CancellationToken, which the API doesn't show, has none (CS1573). -->
+	<PropertyGroup>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<CopyDocumentationFilesFromPackages>true</CopyDocumentationFilesFromPackages>
+		<NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+	</PropertyGroup>
+
 	<ItemGroup>
-		<PackageReference Include="GrayMint.Authorization.MicroserviceAuthorization" Version="3.2.212" />
-		<PackageReference Include="GrayMint.Common.AspNetCore" Version="2.1.308" />
+		<PackageReference Include="GrayMint.Common.AspNetCore" Version="2.1.310" />
+		<PackageReference Include="GrayMint.Common.OpenApi" Version="2.1.310" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.15" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\GrayMint.Wallet\GrayMint.Wallet.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="ApiDocs\ApiIntro.md" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="GrayMint.Wallet.Test" />
 	</ItemGroup>
 
 </Project>

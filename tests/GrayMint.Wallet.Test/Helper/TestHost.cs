@@ -16,14 +16,14 @@ public sealed class TestHost : IAsyncDisposable
     public TestConnectionCounter HostConnections { get; } = new();
     public TestConnectionCounter WalletConnections { get; } = new();
 
-    private TestHost(TestWallet wallet)
+    private TestHost(TestWallet testWallet)
     {
-        Wallet = wallet;
+        Wallet = testWallet;
         var services = new ServiceCollection();
-        services.AddDbContext<TestDbContext>(options => wallet.UseDatabase(options).AddInterceptors(HostConnections));
+        services.AddDbContext<TestDbContext>(options => testWallet.UseDatabase(options).AddInterceptors(HostConnections));
         services.AddGrayMintWallet();
         services.AddGrayMintWalletDb<TestDbContext>((connection, options) =>
-            wallet.UseDatabase(options, connection).AddInterceptors(WalletConnections));
+            testWallet.UseDatabase(options, connection).AddInterceptors(WalletConnections));
         _serviceProvider = services.BuildServiceProvider();
     }
 

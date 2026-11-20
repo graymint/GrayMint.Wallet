@@ -9,7 +9,7 @@ internal sealed class WalletStartup(IServiceScopeFactory serviceScopeFactory) : 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await using var scope = serviceScopeFactory.CreateAsyncScope();
-        await WalletSetup.ThrowIfIncomplete(
+        await WalletSetup.ThrowIfNotReady(
             scope.ServiceProvider.GetRequiredService<WalletDbContext>(),
             scope.ServiceProvider.GetService<HostDatabase>(),
             cancellationToken);

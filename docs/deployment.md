@@ -4,18 +4,35 @@ For whoever runs the server, `GrayMint.Wallet.Server`, or a host that embeds the
 
 ## A host that embeds the wallet
 
-- `AddGrayMintWallet()` registers the service, and `AddGrayMintWalletDb` its context: on the host's connection,
-  to run in the host's transactions, or on a connection of its own (the README shows both). The host doesn't
-  start on a database without the wallet's tables.
-- The host's setup runs `UseGrayMintWallet()`, with a login that may make tables. It makes the schema `gmwallet`
-  and the wallet's tables when they are not there; it can run any number of times. On a connection of its own it
-  makes the database too.
+- `AddGrayMintWallet()` registers the services (`WalletService`, `WalletTransferService`,
+  `WalletReconciliationService`), and `AddGrayMintWalletDb` their context: on the host's connection, to run in the
+  host's database transactions, or on a connection of its own (the README shows both). The host doesn't start on
+  a database without the wallet's tables, or with tables of another version.
+- The host's setup runs `UseGrayMintWallet()`, with a login that may make tables. It makes the schema `gmwallet`,
+  the wallet's tables and the row of their version when they are not there; it can run any number of times. On a
+  connection of its own it makes the database too. Run a new build's setup before its first start: the start
+  takes tables of its own version alone.
 - The login the host runs with needs to read, insert and update the wallet's rows, and nothing more.
+- A host that walls the rows off by tenant, as with a row-level security policy, names the tables from
+  `WalletSchema`: every row of `TenantTables` has its tenant in `TenantId`, and `SchemaVersion` holds one row of
+  no tenant, which every login reads.
 - Give the wallet's context no strategy that retries on failure (`EnableRetryOnFailure`): the start refuses one.
   Retry a whole call instead; its keys make that safe.
 - On SQL Server, leave `XACT_ABORT` off, as SQL Server has it, or a call the database refuses ends the host's
-  whole transaction.
-- A job of the host's runs `FindTotalsMismatches` now and then and raises an alarm on anything it finds.
+  whole database transaction.
+- Run the wallet's calls at read committed, the databases' default. Under snapshot or repeatable read, a key
+  another call took meanwhile comes out as the database's error, not as a conflict.
+- The wallets a call locks stay locked until the host's database transaction ends: commit soon after the
+  wallet's calls, and keep slow work, such as a call to a payment gateway, out of the database transaction. Two
+  database transactions that each make several wallet calls can deadlock; the database ends one of them, which
+  the host retries whole.
+- Money enters a tenant from its root wallet in the currency, `WalletService.GetOrCreateRootWallet`, and leaves it
+  to that wallet: a top-up paid from outside goes out of the root, a refund paid back goes into it. The owner
+  `root` is the root wallets' alone.
+- Nothing calls `WalletReconciliationService.Reconcile` on its own: call it when you want its report of where the
+  books disagree. It reads every wallet and transfer the login can see. In a SQL Server database that reads
+  committed rows by locks, not by their versions as one the setup makes does, it holds writes to the wallets off
+  while it adds the currencies up.
 
 ## The server
 
@@ -28,11 +45,7 @@ environment variables and arguments.
 | --- | --- |
 | `ConnectionStrings:WalletDatabase` | The server's database. Required. |
 | `WalletServer:DatabaseProvider` | `PostgreSql` or `SqlServer`: what the connection string is for. Required. |
-| `Auth:Issuer` | The issuer of the server's tokens. Required. |
-| `Auth:Audience` | The audience of the server's tokens. |
-| `Auth:Secret` | The key that signs the server's tokens: 32 random bytes as base64. Required, and of the server's own. Whoever holds it is the system. |
-| `Auth:AllowSystemApiKey` | `true` opens `POST /api/authorization/system/api-key`, which takes the secret and answers with a token for the system. Off outside Development unless set. |
-| `WalletServer:SystemAuthorizationCode` | Every system token carries it: changing it ends every system token at once. Required. |
+| `WalletServer:ApiKeys` | The keys the system calls with: one, or two while a new key takes over. Each has at least 32 characters, such as 32 random bytes in base64 (`openssl rand -base64 32`). Required, and secret: whoever holds a key may move any tenant's money. |
 
 The server checks its settings as it starts, and a missing or wrong one stops the start.
 
@@ -44,32 +57,46 @@ setup alone uses, and a login for the server that may read and write rows and no
 
     GrayMint.Wallet.Server setup --ConnectionStrings:WalletDatabase="..." --WalletServer:DatabaseProvider=PostgreSql
 
-It makes the database and the tables when they are not there, and can run any number of times.
+It needs no setting but these two, makes the database and the tables when they are not there, and can run any
+number of times. Run it again before a new build of the server first starts: the server starts on tables of its
+own version alone.
+
+To change the key, add the new one as a second key, move the caller to it, then take the old one out. Each change
+of the keys takes a restart.
 
 ### Calling it
 
-A caller signs in as the system with a token the secret signed: either one it makes itself with
-GrayMint.Authorization, or one the system api-key address gives back for the secret. Every address takes it as
-`Authorization: Bearer <token>`:
+The caller, the system, sends one of the server's keys with every request, as `Authorization: Bearer <key>`:
 
 | Address | What it does |
 | --- | --- |
-| `POST /api/ledgers/{ledgerId}/accounts` | Makes an account. |
-| `GET /api/ledgers/{ledgerId}/accounts/{accountId}` | An account, with its totals. |
-| `GET /api/ledgers/{ledgerId}/accounts?ownerId=` | An owner's accounts. |
-| `PUT /api/ledgers/{ledgerId}/accounts/{accountId}/min-balance` | Changes an account's limit. |
-| `GET /api/ledgers/{ledgerId}/accounts/{accountId}/transfers?count=&beforeTransferId=` | Its transfers, newest first. |
-| `POST /api/ledgers/{ledgerId}/transfers` | Makes a chain of transfers. |
-| `POST /api/ledgers/{ledgerId}/transfers/post` | Posts pending transfers by their keys. |
-| `POST /api/ledgers/{ledgerId}/transfers/void` | Voids pending transfers by their keys. |
-| `GET /api/ledgers/{ledgerId}/transfers/by-key?key=` | A transfer by its key. |
+| `POST /api/tenants/{tenantId}/wallets` | Makes a wallet. |
+| `GET /api/tenants/{tenantId}/wallets/root?currency=` | The tenant's root wallet in a currency, made at the first call. |
+| `GET /api/tenants/{tenantId}/wallets/{walletId}` | A wallet, with its totals. |
+| `GET /api/tenants/{tenantId}/wallets?ownerReferenceKey=` | An owner's wallets. |
+| `PATCH /api/tenants/{tenantId}/wallets/{walletId}` | Changes a wallet's limit: `{ "minAvailableBalance": { "value": -50 } }`. |
+| `GET /api/tenants/{tenantId}/wallets/{walletId}/transactions?limit=&beforeTransferId=` | Its transactions, newest first: its statement, with each transfer's amount and the balances it left. |
+| `POST /api/tenants/{tenantId}/transfers` | Makes linked transfers, all of them or none. |
+| `POST /api/tenants/{tenantId}/transfers/post` | Posts pending transfers by their external reference keys. |
+| `POST /api/tenants/{tenantId}/transfers/void` | Voids pending transfers by their external reference keys. |
+| `GET /api/tenants/{tenantId}/transfers?externalReferenceKey=` | A transfer by its external reference key. |
+| `GET /api/reconciliation` | Reconciles the books of every tenant and reports where they disagree, changing nothing. |
 
-Every id, in an address or in a body, is text: `"accountId": "42"`. A transfer's type is its name, such as
+Nothing reconciles the books on its own: ask for the report when you want it. It reads every wallet and transfer,
+and in a SQL Server database that reads committed rows by locks, not by their versions as one the setup makes does,
+it holds writes to the wallets off while it adds the currencies up.
+
+Every id, in an address or in a body, is text: `"walletId": "42"`. A transfer's type is its name, such as
 `"PostPending"`.
 
-A refused request answers 400 when it is wrong in itself, 404 for an account or transfer that is not in the
-ledger or an id that is no number, and 409 when the ledger's state refuses it: too little to spend, a key of
-another transfer, an account that is there already, a pending transfer settled the other way. A caller that gets
-no answer sends the same request again.
+A request without one of the server's keys answers 401. A refused request answers 400 when it is wrong in itself,
+404 for a wallet or transfer that is not in the tenant or an id that is no number, and 409 when the tenant's state
+refuses it: too little to spend, a key of another transfer, a wallet that is there already, a pending transfer
+settled the other way. Any other failure, such as the database's, answers 500. A caller that gets no answer, or a
+500, sends the same request again.
 
-The server takes no request from a browser and sends no CORS headers. Run it behind TLS.
+The API describes itself at `/openapi/v1.json`, for a tool that makes a client, and in a reference to read at
+`/scalar`, where the server's root leads. Neither takes a key, and the description holds no data, only the
+addresses and their words.
+
+The server takes no request from another site's page and sends no CORS headers. Run it behind TLS.

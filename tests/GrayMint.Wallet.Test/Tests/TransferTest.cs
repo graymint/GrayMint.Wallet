@@ -14,137 +14,144 @@ public class TransferTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task PostedTransferMovesTheMoneyAtOnce(WalletDatabaseProvider provider)
     {
-        await using var wallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await wallet.CreateSource(CancellationToken);
-        var account = await wallet.CreateAccount("owner", 0, CancellationToken);
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        var source = await testWallet.CreateSource(CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
 
-        var transfers = await wallet.Transfer(CancellationToken, TestWallet.Request(source, account, 100.25m));
+        var transfers = await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 100.25m));
         Assert.HasCount(1, transfers);
         Assert.AreEqual(WalletTransferType.Posted, transfers[0].Type);
         Assert.AreEqual(100.25m, transfers[0].Amount);
 
-        account = await wallet.GetAccount(account.AccountId, CancellationToken);
-        Assert.AreEqual(100.25m, account.CreditsPosted);
-        Assert.AreEqual(100.25m, account.Balance);
-        Assert.AreEqual(100.25m, account.Available);
-        source = await wallet.GetAccount(source.AccountId, CancellationToken);
-        Assert.AreEqual(100.25m, source.DebitsPosted);
-        Assert.AreEqual(-100.25m, source.Balance);
+        wallet = await testWallet.GetWallet(wallet.WalletId, CancellationToken);
+        Assert.AreEqual(100.25m, wallet.PostedIn);
+        Assert.AreEqual(100.25m, wallet.PostedBalance);
+        Assert.AreEqual(100.25m, wallet.AvailableBalance);
+        source = await testWallet.GetWallet(source.WalletId, CancellationToken);
+        Assert.AreEqual(100.25m, source.PostedOut);
+        Assert.AreEqual(-100.25m, source.PostedBalance);
     }
 
     [TestMethod, EveryDatabase]
-    public async Task AccountSpendsNoMoreThanItHas(WalletDatabaseProvider provider)
+    public async Task WalletSpendsNoMoreThanItHas(WalletDatabaseProvider provider)
     {
-        await using var wallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await wallet.CreateSource(CancellationToken);
-        var account = await wallet.CreateAccount("owner", 0, CancellationToken);
-        var other = await wallet.CreateAccount("other", 0, CancellationToken);
-        await wallet.Transfer(CancellationToken, TestWallet.Request(source, account, 10));
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        var source = await testWallet.CreateSource(CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
+        var other = await testWallet.CreateWallet("other", 0, CancellationToken);
+        await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 10));
 
-        var exception = await Assert.ThrowsExactlyAsync<InsufficientBalanceException>(() =>
-            wallet.Transfer(CancellationToken, TestWallet.Request(account, other, 10.01m)));
-        Assert.AreEqual(account.AccountId, exception.AccountId);
-        Assert.AreEqual(10m, exception.Available);
+        var exception = await Assert.ThrowsExactlyAsync<InsufficientFundsException>(() =>
+            testWallet.Transfer(CancellationToken, TestWallet.Request(wallet, other, 10.01m)));
+        Assert.AreEqual(wallet.WalletId, exception.WalletId);
+        Assert.AreEqual(10m, exception.AvailableBalance);
 
         // nothing of it is kept
-        Assert.AreEqual(10m, (await wallet.GetAccount(account.AccountId, CancellationToken)).Balance);
-        Assert.AreEqual(0m, (await wallet.GetAccount(other.AccountId, CancellationToken)).Balance);
-        Assert.AreEqual(1L, await wallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
+        Assert.AreEqual(10m, (await testWallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
+        Assert.AreEqual(0m, (await testWallet.GetWallet(other.WalletId, CancellationToken)).PostedBalance);
+        Assert.AreEqual(1L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
 
         // to the last cent
-        await wallet.Transfer(CancellationToken, TestWallet.Request(account, other, 10));
-        Assert.AreEqual(0m, (await wallet.GetAccount(account.AccountId, CancellationToken)).Balance);
+        await testWallet.Transfer(CancellationToken, TestWallet.Request(wallet, other, 10));
+        Assert.AreEqual(0m, (await testWallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
     }
 
     [TestMethod, EveryDatabase]
-    public async Task CreditLimitLetsAnAccountGoBelowZeroAsFarAsIt(WalletDatabaseProvider provider)
+    public async Task CreditLimitLetsAWalletGoBelowZeroAsFarAsIt(WalletDatabaseProvider provider)
     {
-        await using var wallet = await TestWallet.Create(provider, CancellationToken);
-        var account = await wallet.CreateAccount("owner", -50, CancellationToken);
-        var other = await wallet.CreateAccount("other", 0, CancellationToken);
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", -50, CancellationToken);
+        var other = await testWallet.CreateWallet("other", 0, CancellationToken);
 
-        await wallet.Transfer(CancellationToken, TestWallet.Request(account, other, 50));
-        Assert.AreEqual(-50m, (await wallet.GetAccount(account.AccountId, CancellationToken)).Balance);
-        await Assert.ThrowsExactlyAsync<InsufficientBalanceException>(() =>
-            wallet.Transfer(CancellationToken, TestWallet.Request(account, other, 0.00000001m)));
+        await testWallet.Transfer(CancellationToken, TestWallet.Request(wallet, other, 50));
+        Assert.AreEqual(-50m, (await testWallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
+        await Assert.ThrowsExactlyAsync<InsufficientFundsException>(() =>
+            testWallet.Transfer(CancellationToken, TestWallet.Request(wallet, other, 0.00000001m)));
     }
 
     [TestMethod, EveryDatabase]
-    public async Task AccountWithoutLimitGoesAnyWhere(WalletDatabaseProvider provider)
+    public async Task WalletWithoutLimitGoesAnyWhere(WalletDatabaseProvider provider)
     {
-        await using var wallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await wallet.CreateSource(CancellationToken);
-        var account = await wallet.CreateAccount("owner", 0, CancellationToken);
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        var source = await testWallet.CreateSource(CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
 
-        await wallet.Transfer(CancellationToken, TestWallet.Request(source, account, WalletService.MaxAmount));
-        Assert.AreEqual(-WalletService.MaxAmount, (await wallet.GetAccount(source.AccountId, CancellationToken)).Balance);
+        await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, WalletLimits.MaxAmount));
+        Assert.AreEqual(-WalletLimits.MaxAmount, (await testWallet.GetWallet(source.WalletId, CancellationToken)).PostedBalance);
     }
 
     [TestMethod, EveryDatabase]
     public async Task TransferRequestIsChecked(WalletDatabaseProvider provider)
     {
-        await using var wallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await wallet.CreateSource(CancellationToken);
-        var account = await wallet.CreateAccount("owner", 0, CancellationToken);
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        var source = await testWallet.CreateSource(CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
 
-        foreach (var amount in new[] { 0m, -1m, 0.000000001m, WalletService.MaxAmount + 1 })
+        foreach (var amount in new[] { 0m, -1m, 0.000000001m, WalletLimits.MaxAmount + 1 })
             await Assert.ThrowsAsync<ArgumentException>(() =>
-                wallet.Transfer(CancellationToken, TestWallet.Request(source, account, amount)), amount.ToString());
+                testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, amount)), amount.ToString());
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            wallet.Transfer(CancellationToken, TestWallet.Request(source, source, 1)));
-        await Assert.ThrowsAsync<ArgumentException>(() => wallet.Transfer(CancellationToken,
-            TestWallet.Request(source, account, 1, key: "k"), TestWallet.Request(source, account, 2, key: "k")));
-        await Assert.ThrowsAsync<ArgumentException>(() => wallet.Transfer(CancellationToken));
-        await Assert.ThrowsAsync<ArgumentException>(() => wallet.Transfer(CancellationToken,
-            Enumerable.Range(0, WalletService.MaxChainLength + 1)
-                .Select(_ => TestWallet.Request(source, account, 1)).ToArray()));
-        foreach (var key in new[] { "", " k", new string('k', WalletService.MaxKeyLength + 1) })
+            testWallet.Transfer(CancellationToken, TestWallet.Request(source, source, 1)));
+        // one wallet, its id written two ways
+        await Assert.ThrowsAsync<ArgumentException>(() => testWallet.Transfer(CancellationToken,
+            new WalletTransferCreateRequest {
+                ExternalReferenceKey = "k", FromWalletId = source.WalletId, ToWalletId = "0" + source.WalletId,
+                Amount = 1
+            }));
+        await Assert.ThrowsAsync<ArgumentException>(() => testWallet.Transfer(CancellationToken,
+            TestWallet.Request(source, wallet, 1, externalReferenceKey: "k"), TestWallet.Request(source, wallet, 2, externalReferenceKey: "k")));
+        await Assert.ThrowsAsync<ArgumentException>(() => testWallet.Transfer(CancellationToken));
+        await Assert.ThrowsAsync<ArgumentException>(() => testWallet.Transfer(CancellationToken,
+            Enumerable.Range(0, WalletLimits.MaxLinkedTransfers + 1)
+                .Select(_ => TestWallet.Request(source, wallet, 1)).ToArray()));
+        foreach (var key in new[] { "", " k", new string('k', WalletLimits.MaxExternalReferenceKeyLength + 1) })
             await Assert.ThrowsAsync<ArgumentException>(() =>
-                wallet.Transfer(CancellationToken, TestWallet.Request(source, account, 1, key: key)), key);
+                testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 1, externalReferenceKey: key)), key);
+        foreach (var code in new[] { "", " c", new string('c', WalletLimits.MaxCodeLength + 1) })
+            await Assert.ThrowsAsync<ArgumentException>(() => testWallet.Transfer(CancellationToken,
+                new WalletTransferCreateRequest {
+                    ExternalReferenceKey = "k", FromWalletId = source.WalletId, ToWalletId = wallet.WalletId, Amount = 1,
+                    PurposeCode = code
+                }), code);
 
-        Assert.AreEqual(0L, await wallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
+        Assert.AreEqual(0L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
+    }
+
+    // A lookup takes only what a write would take: SQL Server would find "k" for "k ", and a missing key would find
+    // a post or a void, which have none.
+    [TestMethod, EveryDatabase]
+    public async Task TransferLookupIsChecked(WalletDatabaseProvider provider)
+    {
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        var source = await testWallet.CreateSource(CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
+        await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 1, isPending: true, externalReferenceKey: "k"));
+        await using var scope = testWallet.CreateScope();
+        await scope.Transfers.PostPending(TestWallet.TenantId, ["k"], CancellationToken);
+
+        foreach (var key in new[] { "k ", " k", "", null })
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                scope.Transfers.GetByExternalReferenceKey(TestWallet.TenantId, key!, CancellationToken), key ?? "null");
+        await Assert.ThrowsExactlyAsync<NotExistsException>(() =>
+            scope.Transfers.GetByExternalReferenceKey(TestWallet.TenantId, "other", CancellationToken));
+        Assert.AreEqual(1m, (await scope.Transfers.GetByExternalReferenceKey(TestWallet.TenantId, "k", CancellationToken)).Amount);
     }
 
     [TestMethod, EveryDatabase]
-    public async Task MoneyStaysInItsLedgerAndItsCurrency(WalletDatabaseProvider provider)
+    public async Task MoneyStaysInItsTenantAndItsCurrency(WalletDatabaseProvider provider)
     {
-        await using var wallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await wallet.CreateSource(CancellationToken);
-        var account = await wallet.CreateAccount("owner", 0, CancellationToken);
-        var otherLedger = await wallet.CreateAccount("owner", 0, CancellationToken, ledgerId: 2);
-        var otherCurrency = await wallet.CreateAccount("owner", 0, CancellationToken, currency: "EUR");
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        var source = await testWallet.CreateSource(CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
+        var otherTenant = await testWallet.CreateWallet("owner", 0, CancellationToken, tenantId: "2");
+        var otherCurrency = await testWallet.CreateWallet("owner", 0, CancellationToken, currency: "EUR");
 
         await Assert.ThrowsExactlyAsync<NotExistsException>(() =>
-            wallet.Transfer(CancellationToken, TestWallet.Request(source, otherLedger, 1)));
+            testWallet.Transfer(CancellationToken, TestWallet.Request(source, otherTenant, 1)));
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            wallet.Transfer(CancellationToken, TestWallet.Request(source, otherCurrency, 1)));
-        Assert.AreEqual(0L, await wallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
-        Assert.AreEqual(0m, (await wallet.GetAccount(account.AccountId, CancellationToken)).Balance);
-    }
-
-    [TestMethod, EveryDatabase]
-    public async Task AccountTransfersComeNewestFirstByPage(WalletDatabaseProvider provider)
-    {
-        await using var wallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await wallet.CreateSource(CancellationToken);
-        var account = await wallet.CreateAccount("owner", 0, CancellationToken);
-        var other = await wallet.CreateAccount("other", 0, CancellationToken);
-        for (var i = 1; i <= 5; i++)
-            await wallet.Transfer(CancellationToken, TestWallet.Request(source, account, i));
-        await wallet.Transfer(CancellationToken, TestWallet.Request(source, other, 100));
-        await wallet.Transfer(CancellationToken, TestWallet.Request(account, other, 1));
-
-        await using var dbContext = wallet.CreateDbContext();
-        var walletService = TestWallet.CreateService(dbContext);
-        var page = await walletService.GetAccountTransfers(TestWallet.LedgerId, account.AccountId, null, 4, CancellationToken);
-        CollectionAssert.AreEqual(new[] { 1m, 5m, 4m, 3m }, page.Select(x => x.Amount).ToArray());
-        var next = await walletService.GetAccountTransfers(TestWallet.LedgerId, account.AccountId, page[^1].TransferId, 4, CancellationToken);
-        CollectionAssert.AreEqual(new[] { 2m, 1m }, next.Select(x => x.Amount).ToArray());
-
-        await Assert.ThrowsAsync<ArgumentException>(() => walletService.GetAccountTransfers(TestWallet.LedgerId,
-            account.AccountId, null, WalletService.MaxPageSize + 1, CancellationToken));
-        await Assert.ThrowsExactlyAsync<NotExistsException>(() =>
-            walletService.GetAccountTransfers(2, account.AccountId, null, 4, CancellationToken));
+            testWallet.Transfer(CancellationToken, TestWallet.Request(source, otherCurrency, 1)));
+        Assert.AreEqual(0L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
+        Assert.AreEqual(0m, (await testWallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
     }
 }

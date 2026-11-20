@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Which lines of the library and the server the tests run, as CLAUDE.md rule 6 says. The code the build generates
+     under obj is left out: the server's holds an OpenAPI reader that never runs, as GrayMint.Common.OpenApi reads the
+     doc comments itself. -->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Include>[GrayMint.Wallet]*,[GrayMint.Wallet.Server]*</Include>
+          <ExcludeByFile>**/obj/**/*.cs</ExcludeByFile>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

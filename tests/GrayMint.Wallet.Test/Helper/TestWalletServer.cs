@@ -1,52 +1,47 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Security.Claims;
 using System.Security.Cryptography;
-using GrayMint.Authorization.Abstractions;
-using GrayMint.Authorization.Authentications;
-using GrayMint.Authorization.Authentications.Dtos;
 using GrayMint.Wallet.Server;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace GrayMint.Wallet.Test.Helper;
 
 // The server as a deployment runs it: its setup command makes the database, then it serves, with settings of its
-// own and none of Development's.
+// own and none of Development's, and two API keys, as while a new key takes over from the old one.
 public sealed class TestWalletServer : IAsyncDisposable
 {
     private readonly TestWalletFactory _factory;
-    private readonly string _secret;
 
     public TestWallet Database { get; }
+    public IReadOnlyList<string> ApiKeys { get; }
 
-    private TestWalletServer(TestWallet database, string secret, IReadOnlyDictionary<string, string?> settings,
-        Action<IServiceCollection>? replaceServices)
+    private TestWalletServer(TestWallet database, IReadOnlyList<string> apiKeys,
+        IReadOnlyDictionary<string, string?> settings)
     {
         Database = database;
-        _secret = secret;
-        _factory = new TestWalletFactory(settings, replaceServices);
+        ApiKeys = apiKeys;
+        _factory = new TestWalletFactory(settings);
     }
 
-    public const string SystemAuthorizationCode = "test-code";
-
     public static async Task<TestWalletServer> Create(WalletDatabaseProvider provider,
-        Action<IServiceCollection>? replaceServices = null)
+        IReadOnlyList<string>? apiKeys = null)
     {
         var database = TestWallet.CreateEmpty(provider);
-        var secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        var keys = apiKeys ?? [CreateApiKey(), CreateApiKey()];
         var settings = new Dictionary<string, string?> {
             ["ConnectionStrings:WalletDatabase"] = database.ConnectionString,
-            ["WalletServer:DatabaseProvider"] = provider.ToString(),
-            ["Auth:Issuer"] = "test-wallet",
-            ["Auth:Audience"] = "test-wallet",
-            ["Auth:Secret"] = secret,
-            ["Auth:AllowSystemApiKey"] = "true",
-            ["WalletServer:SystemAuthorizationCode"] = SystemAuthorizationCode
+            ["WalletServer:DatabaseProvider"] = provider.ToString()
         };
+        for (var i = 0; i < keys.Count; i++)
+            settings[$"WalletServer:ApiKeys:{i}"] = keys[i];
 
         await Program.Main(["setup", .. settings.Select(x => $"--{x.Key}={x.Value}")]);
-        return new TestWalletServer(database, secret, settings, replaceServices);
+        return new TestWalletServer(database, keys, settings);
+    }
+
+    // 32 random bytes in base64, as docs/deployment.md makes a key
+    public static string CreateApiKey()
+    {
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     }
 
     public HttpClient CreateClient()
@@ -54,31 +49,17 @@ public sealed class TestWalletServer : IAsyncDisposable
         return _factory.CreateClient();
     }
 
-    // a token for the system, as a service that holds the secret gets one
-    public async Task<HttpClient> CreateSystemClient(CancellationToken cancellationToken)
+    // a client that reports a redirect, where the default one follows it
+    public HttpClient CreateClientWithoutRedirects()
     {
-        var client = _factory.CreateClient();
-        using var response = await client.PostAsync("/api/authorization/system/api-key",
-            new FormUrlEncodedContent([new KeyValuePair<string, string>("secret", _secret)]), cancellationToken);
-        response.EnsureSuccessStatusCode();
-        var apiKey = await response.Content.ReadFromJsonAsync<ApiKey>(cancellationToken)
-                     ?? throw new InvalidOperationException("The server gave no api key.");
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.AccessToken.Value);
-        return client;
+        return _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
-    // A token the server itself signed for someone who is not the system, carrying the system's code, as if it
-    // had leaked.
-    public async Task<HttpClient> CreateUserClient(string userId)
+    // the system, with one of the server's keys
+    public HttpClient CreateSystemClient(string? apiKey = null)
     {
-        var claimsIdentity = new ClaimsIdentity();
-        claimsIdentity.AddClaim(new Claim(JwtRegisteredClaimNames.Sub, userId));
-        claimsIdentity.AddClaim(new Claim(GrayMintClaimTypes.AuthCode, SystemAuthorizationCode));
-        var authentication = _factory.Services.GetRequiredService<GrayMintAuthentication>();
-        var apiKey = await authentication.CreateApiKey(claimsIdentity);
-
         var client = _factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.AccessToken.Value);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey ?? ApiKeys[0]);
         return client;
     }
 

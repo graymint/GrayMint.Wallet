@@ -1,16 +1,19 @@
 using System.Data.Common;
-using GrayMint.Wallet.Accounts;
+using System.Globalization;
+using GrayMint.Common.Utils;
+using GrayMint.Wallet.Wallets;
 using GrayMint.Wallet.Persistence;
 using GrayMint.Wallet.Server;
 using GrayMint.Wallet.Transfers;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
 namespace GrayMint.Wallet.Test.Helper;
 
-// A database of one test, on one of the two servers compose.yaml starts, made as the wallet's setup makes it. It has
-// a name nobody else uses and is dropped with the test.
+// A database of one test, on one of the two servers compose.yaml starts, with the wallet registered on it as a host
+// registers it, on a connection of its own. It has a name nobody else uses and is dropped with the test.
 public sealed class TestWallet : IAsyncDisposable
 {
     // by address: "localhost" is tried over IPv6 first, where the containers don't listen
@@ -18,8 +21,10 @@ public sealed class TestWallet : IAsyncDisposable
     private const string SqlServerServer =
         "Server=127.0.0.1,14336;User ID=sa;Password=GrayMint-Wallet-2026;TrustServerCertificate=true";
 
-    public const int LedgerId = 1;
+    public const string TenantId = "1";
     public const string Currency = "USD";
+
+    private readonly ServiceProvider _serviceProvider;
 
     public WalletDatabaseProvider Provider { get; }
     public string DatabaseName { get; } = $"test_{Guid.CreateVersion7():N}";
@@ -31,13 +36,16 @@ public sealed class TestWallet : IAsyncDisposable
     private TestWallet(WalletDatabaseProvider provider)
     {
         Provider = provider;
+        var services = new ServiceCollection();
+        services.AddGrayMintWallet();
+        services.AddGrayMintWalletDb(options => UseDatabase(options));
+        _serviceProvider = services.BuildServiceProvider();
     }
 
     public static async Task<TestWallet> Create(WalletDatabaseProvider provider, CancellationToken cancellationToken)
     {
         var testWallet = new TestWallet(provider);
-        await using var dbContext = testWallet.CreateDbContext();
-        await WalletSetup.Run(dbContext, hostDatabase: null, cancellationToken);
+        await testWallet.Setup(cancellationToken);
         return testWallet;
     }
 
@@ -47,16 +55,24 @@ public sealed class TestWallet : IAsyncDisposable
         return new TestWallet(provider);
     }
 
-    public WalletDbContext CreateDbContext()
+    // the wallet's setup, as a host runs it
+    public async Task Setup(CancellationToken cancellationToken)
+    {
+        await _serviceProvider.UseGrayMintWallet(cancellationToken);
+    }
+
+    // the wallet's services for one scope, as a request of a host gets them
+    public TestWalletScope CreateScope()
+    {
+        return new TestWalletScope(_serviceProvider.CreateAsyncScope());
+    }
+
+    // the wallet's own context, for a test that looks behind its services
+    internal WalletDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<WalletDbContext>();
         UseDatabase(options);
         return new WalletDbContext(options.Options);
-    }
-
-    public static WalletService CreateService(WalletDbContext dbContext)
-    {
-        return new WalletService(dbContext, hostDatabase: null);
     }
 
     // a context on this database, as a host gives it
@@ -83,49 +99,76 @@ public sealed class TestWallet : IAsyncDisposable
             : options.UseSqlServer(connection);
     }
 
-    // an account with no limit, which money comes from, as a host's cash account
-    public async Task<WalletAccount> CreateSource(CancellationToken cancellationToken, int ledgerId = LedgerId,
+    // a wallet with no limit, which money comes from, as a host's cash wallet
+    public async Task<WalletInfo> CreateSource(CancellationToken cancellationToken, string tenantId = TenantId,
         string currency = Currency)
     {
-        return await CreateAccount("source", null, cancellationToken, ledgerId, currency);
+        return await CreateWallet("source", null, cancellationToken, tenantId, currency);
     }
 
-    public async Task<WalletAccount> CreateAccount(string ownerId, decimal? minBalance,
-        CancellationToken cancellationToken, int ledgerId = LedgerId, string currency = Currency)
+    public async Task<WalletInfo> CreateWallet(string ownerReferenceKey, decimal? minAvailableBalance,
+        CancellationToken cancellationToken, string tenantId = TenantId, string currency = Currency)
     {
-        await using var dbContext = CreateDbContext();
-        return await CreateService(dbContext).CreateAccount(ledgerId, new WalletAccountCreateRequest {
-            OwnerId = ownerId,
-            Code = "credit",
+        await using var scope = CreateScope();
+        return await scope.Wallets.Create(tenantId, new WalletCreateRequest {
+            OwnerReferenceKey = ownerReferenceKey,
+            WalletCode = "credit",
             Currency = currency,
-            MinBalance = minBalance
+            MinAvailableBalance = minAvailableBalance
         }, cancellationToken);
     }
 
-    public async Task<WalletAccount> GetAccount(long accountId, CancellationToken cancellationToken,
-        int ledgerId = LedgerId)
+    public async Task<WalletInfo> GetWallet(string walletId, CancellationToken cancellationToken,
+        string tenantId = TenantId)
     {
-        await using var dbContext = CreateDbContext();
-        return await CreateService(dbContext).GetAccount(ledgerId, accountId, cancellationToken);
+        await using var scope = CreateScope();
+        return await scope.Wallets.Get(tenantId, walletId, cancellationToken);
+    }
+
+    // a wallet's transactions, oldest first, as its statement reads
+    public async Task<IReadOnlyList<WalletTransaction>> GetTransactions(WalletInfo wallet,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = CreateScope();
+        var transactions = await scope.Wallets.GetTransactions(wallet.TenantId, wallet.WalletId, null,
+            WalletLimits.MaxPageSize, cancellationToken);
+        return transactions.Reverse().ToArray();
     }
 
     public async Task<IReadOnlyList<WalletTransfer>> Transfer(CancellationToken cancellationToken,
-        params IReadOnlyList<WalletTransferRequest> requests)
+        params IReadOnlyList<WalletTransferCreateRequest> requests)
     {
-        await using var dbContext = CreateDbContext();
-        return await CreateService(dbContext).CreateTransfers(LedgerId, requests, cancellationToken);
+        await using var scope = CreateScope();
+        return await scope.Transfers.Create(TenantId, requests, cancellationToken);
     }
 
-    public static WalletTransferRequest Request(WalletAccount debit, WalletAccount credit, decimal amount,
-        bool isPending = false, string? key = null)
+    public static WalletTransferCreateRequest Request(WalletInfo fromWallet, WalletInfo toWallet, decimal amount,
+        bool isPending = false, string? externalReferenceKey = null)
     {
-        return new WalletTransferRequest {
-            Key = key ?? $"key-{Guid.CreateVersion7():N}",
-            DebitAccountId = debit.AccountId,
-            CreditAccountId = credit.AccountId,
+        return new WalletTransferCreateRequest {
+            ExternalReferenceKey = externalReferenceKey ?? $"key-{Guid.CreateVersion7():N}",
+            FromWalletId = fromWallet.WalletId,
+            ToWalletId = toWallet.WalletId,
             Amount = amount,
             IsPending = isPending
         };
+    }
+
+    public static WalletUpdateRequest LimitUpdate(decimal? minAvailableBalance)
+    {
+        return new WalletUpdateRequest { MinAvailableBalance = new Patch<decimal?>(minAvailableBalance) };
+    }
+
+    // Locks a wallet's row as a call that writes it does, until the context's transaction ends.
+    internal static async Task LockWallet(WalletDbContext dbContext, WalletInfo wallet,
+        CancellationToken cancellationToken)
+    {
+        await dbContext.Wallets
+            .FromSqlRaw(WalletDialect.For(dbContext.Database).LockWalletSql,
+                int.Parse(wallet.TenantId, CultureInfo.InvariantCulture),
+                int.Parse(wallet.WalletId, CultureInfo.InvariantCulture))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
     }
 
     // What a test does behind the wallet's back, as the owner of the tables. Names are quoted "so", which both
@@ -160,9 +203,18 @@ public sealed class TestWallet : IAsyncDisposable
             await Task.Delay(TimeSpan.FromMilliseconds(20), timeout.Token);
     }
 
+    // SQL Server only. The setup's database reads committed rows by their versions, as EF makes one; from here it
+    // reads them by locks, as a database SQL Server makes on its own does. No other connection may be open meanwhile.
+    public async Task ReadCommittedRowsByLocks(CancellationToken cancellationToken)
+    {
+        SqlConnection.ClearPool(new SqlConnection(ConnectionString));
+        await Execute("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT OFF", cancellationToken);
+    }
+
     // not cancellable: a cancelled test must still drop its database
     public async ValueTask DisposeAsync()
     {
+        await _serviceProvider.DisposeAsync();
         if (Provider == WalletDatabaseProvider.PostgreSql) {
             await using var connection = new NpgsqlConnection($"{PostgreSqlServer};Database=postgres;Pooling=false");
             await connection.OpenAsync(CancellationToken.None);
