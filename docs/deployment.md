@@ -19,8 +19,8 @@ For whoever runs the server, `GrayMint.Wallet.Server`, or a host that embeds the
   takes tables of its own version alone.
 - The login the host runs with needs to read, insert and update the wallet's rows, and nothing more.
 - A host that walls the rows off by tenant, as with a row-level security policy, names the tables from
-  `WalletSchema`: every row of `TenantTables` has its tenant in `TenantId`, and `SchemaVersion` holds one row of
-  no tenant, which every login reads.
+  `WalletSchema`: every row of `TenantTables` has its tenant in `TenantId`, and `Metadata` holds one row of
+  no tenant, with the tables' version, which every login reads.
 - Give the wallet's context no strategy that retries on failure (`EnableRetryOnFailure`): the start refuses one.
   Retry a whole call instead; its keys make that safe.
 - On SQL Server, leave `XACT_ABORT` off, as SQL Server has it, or a call the database refuses ends the host's

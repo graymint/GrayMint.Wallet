@@ -19,7 +19,7 @@ internal static class WalletSetup
          SELECT CAST(COUNT(*) AS int) AS "Value" FROM INFORMATION_SCHEMA.TABLES
          WHERE TABLE_SCHEMA = '{WalletSchema.Name}' AND TABLE_TYPE = 'BASE TABLE'
            AND TABLE_NAME IN ('{WalletSchema.WalletsTable}', '{WalletSchema.TransfersTable}',
-                              '{WalletSchema.WalletTransactionsTable}', '{WalletSchema.SchemaVersionTable}')
+                              '{WalletSchema.WalletTransactionsTable}', '{WalletSchema.MetadataTable}')
          """;
 
     public static async Task Run(WalletDbContext walletDbContext, HostDatabase? hostDatabase,
@@ -41,7 +41,9 @@ internal static class WalletSetup
             var tableCount = await CountTables(walletDbContext, cancellationToken);
             if (tableCount == 0) {
                 await walletDbContext.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(cancellationToken);
-                walletDbContext.SchemaVersions.Add(new SchemaVersionModel { Version = WalletSchema.Version });
+                walletDbContext.Metadata.Add(new MetadataModel {
+                    MetadataId = WalletDbContext.MetadataRowId, SchemaVersion = WalletSchema.Version
+                });
                 await walletDbContext.SaveChangesAsync(cancellationToken);
             }
             else if (tableCount != TableCount)
@@ -70,9 +72,9 @@ internal static class WalletSetup
                 $"The wallet's tables are not in the schema {WalletSchema.Name}, or this login has no right on " +
                 "them. The wallet's setup (UseGrayMintWallet) makes them.");
 
-        var versions = await walletDbContext.SchemaVersions
+        var versions = await walletDbContext.Metadata
             .AsNoTracking()
-            .Select(x => x.Version)
+            .Select(x => x.SchemaVersion)
             .ToArrayAsync(cancellationToken);
         if (versions is not [WalletSchema.Version])
             throw new InvalidOperationException(

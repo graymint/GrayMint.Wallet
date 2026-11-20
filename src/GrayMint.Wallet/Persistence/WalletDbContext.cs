@@ -14,6 +14,10 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
     public const string TransferAmountCheck = "CK_Transfers_Amount";
     public const string TransferWalletsCheck = "CK_Transfers_Wallets";
     public const string TransferTypeCheck = "CK_Transfers_Type";
+    public const string MetadataOneRowCheck = "CK_Metadata_OneRow";
+
+    // the key of the metadata's one row
+    public const int MetadataRowId = 1;
 
     private const int AmountPrecision = 28;
 
@@ -24,7 +28,7 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
     public DbSet<WalletModel> Wallets => Set<WalletModel>();
     public DbSet<TransferModel> Transfers => Set<TransferModel>();
     public DbSet<WalletTransactionModel> WalletTransactions => Set<WalletTransactionModel>();
-    public DbSet<SchemaVersionModel> SchemaVersions => Set<SchemaVersionModel>();
+    public DbSet<MetadataModel> Metadata => Set<MetadataModel>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +36,9 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
         modelBuilder.HasDefaultSchema(WalletSchema.Name);
         // the database the setup makes keeps text as UTF-8, which a varchar parameter needs on SQL Server
         modelBuilder.UseCollation(dialect.DatabaseCollation);
+        // SQL Server names a default by its table and column (DF_Wallets_PostedIn), not at random as it does
+        // unasked, so a setup step can drop or change it by name, as SQL Server asks before a column of it changes
+        modelBuilder.Model.UseNamedDefaultConstraints(true);
 
         // Every text column through here: UTF-8 on both databases, a byte a character of ASCII, and two texts one only
         // when every character is the same, its case too.
@@ -131,11 +138,12 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        modelBuilder.Entity<SchemaVersionModel>(entity => {
-            entity.ToTable(WalletSchema.SchemaVersionTable);
-            entity.HasKey(x => x.Version);
-            // the setup writes the version this build knows, never one the database counts up
-            entity.Property(x => x.Version).ValueGeneratedNever();
+        modelBuilder.Entity<MetadataModel>(entity => {
+            // one row, so the start reads one version, whatever wrote to the table
+            entity.ToTable(WalletSchema.MetadataTable, table =>
+                table.HasCheckConstraint(MetadataOneRowCheck, $"\"MetadataId\" = {MetadataRowId}"));
+            entity.HasKey(x => x.MetadataId);
+            entity.Property(x => x.MetadataId).ValueGeneratedNever();
         });
     }
 }

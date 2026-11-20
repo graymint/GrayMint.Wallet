@@ -74,10 +74,14 @@ A wallet goes out as `WalletInfo` (see Choices).
 
 The wallet has a context of its own, `WalletDbContext`, whose tables are in the schema `gmwallet`. It has no
 migrations: the setup (`UseGrayMintWallet`) makes the tables from its model when none of them is there, writes
-their version in `gmwallet.SchemaVersion`, and runs any number of times. A database with only some of the tables
+their version in the one row of `gmwallet.Metadata` (`SchemaVersion`), and runs any number of times. A later fact
+about the tables is a later column there: the start reads only the columns it knows. A database with only some of the tables
 is refused, and nothing is changed in it. The start refuses tables of any version but the one the build knows
 (`WalletSchema.Version`), and tables without one: a build would read tables of another shape wrong. A change to
-the tables raises the version, and gives the setup a step that takes tables of the version before to it.
+the tables raises the version, and gives the setup a step that takes tables of the version before to it. Every
+key, index and check has the name EF gives it, and so does every default (`DF_Wallets_PostedIn`), which SQL Server
+would otherwise name at random: such a step drops or changes one by its name, as SQL Server asks before a column
+with a default changes.
 
 A host registers the context one of two ways:
 

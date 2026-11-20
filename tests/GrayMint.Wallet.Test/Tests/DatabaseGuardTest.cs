@@ -11,6 +11,9 @@ namespace GrayMint.Wallet.Test.Tests;
 [TestClass]
 public class DatabaseGuardTest(TestContext testContext)
 {
+    private const string SchemaVersionSql =
+        "SELECT \"SchemaVersion\" FROM gmwallet.\"Metadata\"";
+
     private CancellationToken CancellationToken => testContext.CancellationToken;
 
     [TestMethod, EveryDatabase]
@@ -152,7 +155,7 @@ public class DatabaseGuardTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task SetupRefusesADatabaseWithSomeOfTheTables(WalletDatabaseProvider provider)
     {
-        foreach (var table in new[] { WalletSchema.WalletTransactionsTable, WalletSchema.SchemaVersionTable }) {
+        foreach (var table in new[] { WalletSchema.WalletTransactionsTable, WalletSchema.MetadataTable }) {
             await using var testWallet = await TestWallet.Create(provider, CancellationToken);
             await testWallet.Execute($"DROP TABLE gmwallet.\"{table}\"", CancellationToken);
 
@@ -187,6 +190,57 @@ public class DatabaseGuardTest(TestContext testContext)
         Assert.Contains(refusal, exception.Message);
     }
 
+    // SQL Server names a constraint at random unless told its name, and a setup step drops or changes a default by
+    // its name: there every constraint has the name EF gives it, a default DF_<table>_<column>. PostgreSQL names no
+    // default, and has the same six.
+    [TestMethod, EveryDatabase]
+    public async Task DefaultsAreNamedByTheirTableAndColumn(WalletDatabaseProvider provider)
+    {
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        (string Table, string Column)[] defaults = [
+            ("Transfers", "CreatedTime"), ("Wallets", "CreatedTime"), ("Wallets", "PendingIn"),
+            ("Wallets", "PendingOut"), ("Wallets", "PostedIn"), ("Wallets", "PostedOut")
+        ];
+
+        if (provider == WalletDatabaseProvider.SqlServer) {
+            Assert.AreEqual(0L, await testWallet.Count(
+                "SELECT (SELECT COUNT(*) FROM sys.default_constraints WHERE is_system_named = 1) + " +
+                "(SELECT COUNT(*) FROM sys.check_constraints WHERE is_system_named = 1) + " +
+                "(SELECT COUNT(*) FROM sys.key_constraints WHERE is_system_named = 1) + " +
+                "(SELECT COUNT(*) FROM sys.foreign_keys WHERE is_system_named = 1)", CancellationToken));
+            Assert.AreEqual(defaults.Length, await testWallet.Count(
+                "SELECT COUNT(*) FROM sys.default_constraints", CancellationToken));
+            foreach (var (table, column) in defaults)
+                Assert.AreEqual(1L, await testWallet.Count(
+                    "SELECT COUNT(*) FROM sys.default_constraints AS d JOIN sys.columns AS c " +
+                    "ON c.object_id = d.parent_object_id AND c.column_id = d.parent_column_id " +
+                    $"WHERE d.name = 'DF_{table}_{column}' AND c.name = '{column}' " +
+                    $"AND OBJECT_NAME(d.parent_object_id) = '{table}'", CancellationToken), $"{table}.{column}");
+            return;
+        }
+
+        Assert.AreEqual(defaults.Length, await testWallet.Count(
+            "SELECT count(*) FROM information_schema.columns " +
+            "WHERE table_schema = 'gmwallet' AND column_default IS NOT NULL", CancellationToken));
+        foreach (var (table, column) in defaults)
+            Assert.AreEqual(1L, await testWallet.Count(
+                "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'gmwallet' " +
+                $"AND table_name = '{table}' AND column_name = '{column}' AND column_default IS NOT NULL",
+                CancellationToken), $"{table}.{column}");
+    }
+
+    // one row, so the start reads one version, whatever writes to the table
+    [TestMethod, EveryDatabase]
+    public async Task MetadataKeepsOneRow(WalletDatabaseProvider provider)
+    {
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+
+        var exception = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
+            "INSERT INTO gmwallet.\"Metadata\" (\"MetadataId\", \"SchemaVersion\") VALUES (2, 1)", CancellationToken));
+        Assert.Contains(WalletDbContext.MetadataOneRowCheck, exception.Message);
+        Assert.AreEqual(1L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"Metadata\"", CancellationToken));
+    }
+
     // a host that never ran the setup stops at its start, not at its first call
     [TestMethod, EveryDatabase]
     public async Task HostDoesNotStartOnADatabaseWithoutTheTables(WalletDatabaseProvider provider)
@@ -210,18 +264,18 @@ public class DatabaseGuardTest(TestContext testContext)
     public async Task HostDoesNotStartOnTablesOfAnotherVersion(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        Assert.AreEqual(1L, await testWallet.Count("SELECT \"Version\" FROM gmwallet.\"SchemaVersion\"", CancellationToken));
+        Assert.AreEqual(1L, await testWallet.Count(SchemaVersionSql, CancellationToken));
 
-        await testWallet.Execute("UPDATE gmwallet.\"SchemaVersion\" SET \"Version\" = 2", CancellationToken);
+        await testWallet.Execute("UPDATE gmwallet.\"Metadata\" SET \"SchemaVersion\" = 2", CancellationToken);
         using var newer = BuildHost(testWallet);
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             newer.StartAsync(CancellationToken));
         Assert.Contains("of version 2", exception.Message);
         exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => testWallet.Setup(CancellationToken));
         Assert.Contains("of version 2", exception.Message);
-        Assert.AreEqual(2L, await testWallet.Count("SELECT \"Version\" FROM gmwallet.\"SchemaVersion\"", CancellationToken));
+        Assert.AreEqual(2L, await testWallet.Count(SchemaVersionSql, CancellationToken));
 
-        await testWallet.Execute("DELETE FROM gmwallet.\"SchemaVersion\"", CancellationToken);
+        await testWallet.Execute("DELETE FROM gmwallet.\"Metadata\"", CancellationToken);
         using var none = BuildHost(testWallet);
         exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => none.StartAsync(CancellationToken));
         Assert.Contains("of version none", exception.Message);

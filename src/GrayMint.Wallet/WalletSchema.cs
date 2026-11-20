@@ -21,8 +21,11 @@ public static class WalletSchema
     /// </summary>
     public const string WalletTransactionsTable = "WalletTransactions";
 
-    /// <summary>One row, the version of the tables' shape: the setup writes it, and the start reads it.</summary>
-    public const string SchemaVersionTable = "SchemaVersion";
+    /// <summary>
+    /// One row of what the wallet keeps about its own tables, a column each, such as <c>SchemaVersion</c>, the
+    /// version of their shape: the setup writes it, and the start reads it.
+    /// </summary>
+    public const string MetadataTable = "Metadata";
 
     /// <summary>The tables whose every row belongs to one tenant, by its <c>TenantId</c> column.</summary>
     public static IReadOnlyList<string> TenantTables { get; } = [WalletsTable, TransfersTable, WalletTransactionsTable];
