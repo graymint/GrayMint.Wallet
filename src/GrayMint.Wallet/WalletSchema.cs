@@ -1,4 +1,4 @@
-namespace GrayMint.Wallet.Persistence;
+namespace GrayMint.Wallet;
 
 /// <summary>
 /// Where the wallet keeps its rows: tables of its own, in a schema of their own. A host that puts a wall of its own on
