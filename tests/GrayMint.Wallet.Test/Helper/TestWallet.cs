@@ -211,6 +211,28 @@ public sealed class TestWallet : IAsyncDisposable
         await Execute("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT OFF", cancellationToken);
     }
 
+    // The test's database, keeping text in a single-byte code page, as an old database might: LATIN1 on PostgreSQL,
+    // SQL_Latin1_General_CP1_CI_AS on SQL Server.
+    public async Task CreateDatabaseWithoutUtf8(CancellationToken cancellationToken)
+    {
+        if (Provider == WalletDatabaseProvider.PostgreSql) {
+            await using var connection = new NpgsqlConnection($"{PostgreSqlServer};Database=postgres;Pooling=false");
+            await connection.OpenAsync(cancellationToken);
+            await using var command = new NpgsqlCommand(
+                $"CREATE DATABASE \"{DatabaseName}\" ENCODING 'LATIN1' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0",
+                connection);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            return;
+        }
+
+        await using (var connection = new SqlConnection($"{SqlServerServer};Database=master;Pooling=false")) {
+            await connection.OpenAsync(cancellationToken);
+            await using var command = new SqlCommand(
+                $"CREATE DATABASE [{DatabaseName}] COLLATE SQL_Latin1_General_CP1_CI_AS", connection);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
     // not cancellable: a cancelled test must still drop its database
     public async ValueTask DisposeAsync()
     {

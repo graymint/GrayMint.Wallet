@@ -39,10 +39,12 @@ makes them wrong.
    lines of `src` ran (`coverage.cobertura.xml` under `TestResults`): a line no test runs gets a test, except a
    throw for a state the code never reaches (a root wallet gone after it was made) or for a third database.
 7. **One model for both databases.** Whatever EF can say goes through EF. What the two databases say
-   differently (a row lock, a read at one moment, the time a new row gets, a collation) goes in `WalletDialect`,
-   and comes with a test that runs on both. The package names no database provider: the host names its own.
+   differently (a row lock, a read at one moment, the time a new row gets, how text is kept) goes in
+   `WalletDialect`, and comes with a test that runs on both. The package names no database provider: the host
+   names its own.
 8. **Fail loudly.** A setting that is missing or wrong stops the start, not the first request; so does a
-   database without the wallet's tables, or with tables of another version. No error is caught just to go on.
+   database without the wallet's tables, with tables of another version, or that doesn't keep text as UTF-8. No
+   error is caught just to go on.
 9. **.NET 10**, pinned by `global.json`, until the PostgreSQL provider for the next EF Core is released.
 10. **A change to the tables raises their version.** The start takes tables of `WalletSchema.Version` alone. A
     change to the model raises it, and gives the setup a step that takes tables of the version before to it, with
@@ -52,9 +54,10 @@ makes them wrong.
 
 - One type per file, whatever its visibility. In the package, in the folder of its feature (`Wallets`, `Transfers`,
   `Reconciliation`, `Persistence`, `Exceptions`); a table's row is a model in `Persistence/Models`, a query's own
-  shape a view in `Persistence/Views`. The server, two thin layers over the package, is laid out by layer:
-  `Controllers`, its API classes in `Dtos/<feature>`, the converters between them and the package's in
-  `DtoConverters`, and `Security`.
+  shape a view in `Persistence/Views`. `Persistence` is internal throughout: the tables' names a host may need
+  (`WalletSchema`) are at the root, beside `WalletLimits` and the registration. The server, two thin layers over
+  the package, is laid out by layer: `Controllers`, its API classes in `Dtos/<feature>`, the converters between
+  them and the package's in `DtoConverters`, and `Security`.
 - A host sees the three services, the classes they take and give, the exceptions, `WalletLimits`, `WalletSchema`
   and the registration, and nothing else: the context, its models and the repo are internal, so no host writes
   round the services, and a service's constructor is internal, so only the registration makes one. No interface

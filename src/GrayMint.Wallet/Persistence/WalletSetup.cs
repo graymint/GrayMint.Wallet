@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace GrayMint.Wallet.Persistence;
 
 // Makes the wallet's tables when they are not there, any number of times; and refuses a start on a database without
-// them, or with tables of another version.
+// them, with tables of another version, or that doesn't keep text as UTF-8.
 internal static class WalletSetup
 {
     private const int TableCount = 4;
@@ -37,6 +37,7 @@ internal static class WalletSetup
         // the tables and their version are made together, or neither
         await using (var session = await WalletSession.Begin(walletDbContext, hostDatabase, isWrite: true,
                          cancellationToken)) {
+            await ThrowIfNotUtf8(walletDbContext, cancellationToken);
             var tableCount = await CountTables(walletDbContext, cancellationToken);
             if (tableCount == 0) {
                 await walletDbContext.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(cancellationToken);
@@ -63,6 +64,7 @@ internal static class WalletSetup
         await using var session = await WalletSession.Begin(walletDbContext, hostDatabase, isWrite: false,
             cancellationToken);
 
+        await ThrowIfNotUtf8(walletDbContext, cancellationToken);
         if (await CountTables(walletDbContext, cancellationToken) != TableCount)
             throw new InvalidOperationException(
                 $"The wallet's tables are not in the schema {WalletSchema.Name}, or this login has no right on " +
@@ -87,6 +89,19 @@ internal static class WalletSetup
             throw new InvalidOperationException(
                 "The wallet's context retries on failure (EnableRetryOnFailure), which refuses the transactions its " +
                 "calls run in. Leave it out of the wallet's options and retry a whole call: its keys make that safe.");
+    }
+
+    // A key in another script keeps its letters only in UTF-8: elsewhere they could arrive as '?', and two keys be one.
+    private static async Task ThrowIfNotUtf8(WalletDbContext walletDbContext, CancellationToken cancellationToken)
+    {
+        var encoding = await walletDbContext.Database
+            .SqlQueryRaw<string>(WalletDialect.For(walletDbContext.Database).DatabaseEncodingSql)
+            .SingleAsync(cancellationToken);
+        if (encoding != "UTF-8")
+            throw new InvalidOperationException(
+                $"The wallet's database keeps text in {encoding}, not in UTF-8, and a key in another script would " +
+                "lose its letters. Make it UTF-8: on SQL Server a default collation such as " +
+                "Latin1_General_100_CI_AS_SC_UTF8, on PostgreSQL the encoding UTF8.");
     }
 
     private static Task<int> CountTables(WalletDbContext walletDbContext, CancellationToken cancellationToken)

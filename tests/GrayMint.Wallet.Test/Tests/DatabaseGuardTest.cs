@@ -165,6 +165,28 @@ public class DatabaseGuardTest(TestContext testContext)
         }
     }
 
+    // A key in another script keeps its letters only in UTF-8: the setup makes no table in a database that keeps text
+    // otherwise, and a host doesn't start on one.
+    [TestMethod, EveryDatabase]
+    public async Task WalletRefusesADatabaseThatDoesNotKeepUtf8(WalletDatabaseProvider provider)
+    {
+        await using var testWallet = TestWallet.CreateEmpty(provider);
+        await testWallet.CreateDatabaseWithoutUtf8(CancellationToken);
+        var refusal = provider == WalletDatabaseProvider.PostgreSql
+            ? "keeps text in the encoding LATIN1, not in UTF-8"
+            : "keeps text in the collation SQL_Latin1_General_CP1_CI_AS, not in UTF-8";
+
+        var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            testWallet.Setup(CancellationToken));
+        Assert.Contains(refusal, exception.Message);
+        Assert.AreEqual(0L, await testWallet.Count(
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'gmwallet'", CancellationToken));
+
+        using var host = BuildHost(testWallet);
+        exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => host.StartAsync(CancellationToken));
+        Assert.Contains(refusal, exception.Message);
+    }
+
     // a host that never ran the setup stops at its start, not at its first call
     [TestMethod, EveryDatabase]
     public async Task HostDoesNotStartOnADatabaseWithoutTheTables(WalletDatabaseProvider provider)

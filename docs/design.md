@@ -45,6 +45,15 @@ Owners, codes, currencies and external reference keys differ by any character, t
 Server's columns get a binary collation, since a database's own there mostly ignores case. A space at either end
 is refused, as SQL Server would not tell `a` from `a `.
 
+Text is UTF-8 on both databases, a byte a character of ASCII, and a key may be in any script. PostgreSQL keeps text
+in its database's encoding, UTF-8 by default, and counts a length in characters. SQL Server keeps `varchar` as UTF-8
+under a UTF-8 collation (`Latin1_General_100_BIN2_UTF8` on the wallet's columns), where `nvarchar` would take two bytes
+a character, and counts a length in bytes, so a column of 100 characters is 300 bytes long, the most 100 .NET
+characters take. Its client sends a `varchar` parameter in the code page of the database's own collation, whatever
+the column's, so the database's must be UTF-8 too: a letter outside its code page would arrive as `?`, and two keys
+would be one. The setup makes its database so, and the start refuses a database, of either kind, that doesn't keep
+text as UTF-8.
+
 Every id a call takes or gives is text: a wallet's, a transfer's and a tenant's. The database keeps numbers, the
 smallest and quickest keys on both databases; outside, text lets them change without a host's code changing. An id
 that is no number names nothing, and is answered as one that is not there.
@@ -166,8 +175,9 @@ balances follow from the one before: the service writes them under the wallets' 
 
 Everything but four things goes through EF, which says it in each database's own way. The four are in
 `WalletDialect`, for each database: the row lock, a read of all the wallets at one moment, the time a new row gets,
-and the collation that makes SQL Server tell case apart. The start finds the tables through `INFORMATION_SCHEMA`,
-which both databases have. Each case of the tests runs on both.
+and how text is kept: the collations that make SQL Server keep UTF-8 and tell case apart, a text column's length,
+and how a database says it keeps UTF-8. The start finds the tables through `INFORMATION_SCHEMA`, which both
+databases have. Each case of the tests runs on both.
 
 A database the setup makes on SQL Server reads committed rows by their versions, as EF makes one, so a statement
 reads its rows at one moment, as PostgreSQL's always do. A host's database may read them by locks, row by row; the

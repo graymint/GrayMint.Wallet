@@ -7,7 +7,12 @@ For whoever runs the server, `GrayMint.Wallet.Server`, or a host that embeds the
 - `AddGrayMintWallet()` registers the services (`WalletService`, `WalletTransferService`,
   `WalletReconciliationService`), and `AddGrayMintWalletDb` their context: on the host's connection, to run in the
   host's database transactions, or on a connection of its own (the README shows both). The host doesn't start on
-  a database without the wallet's tables, or with tables of another version.
+  a database without the wallet's tables, with tables of another version, or that doesn't keep text as UTF-8.
+- On SQL Server, the host's database needs a UTF-8 default collation, such as `Latin1_General_100_CI_AS_SC_UTF8`:
+  SQL Server sends text in the database's own code page, and a letter outside it would arrive as `?`. Give it one
+  when the database is made (`modelBuilder.UseCollation(...)` in the host's context), or change it with
+  `ALTER DATABASE ... COLLATE Latin1_General_100_CI_AS_SC_UTF8`, which leaves the host's own columns as they are. A
+  PostgreSQL database keeps text as UTF-8 by default.
 - The host's setup runs `UseGrayMintWallet()`, with a login that may make tables. It makes the schema `gmwallet`,
   the wallet's tables and the row of their version when they are not there; it can run any number of times. On a
   connection of its own it makes the database too. Run a new build's setup before its first start: the start
@@ -51,9 +56,11 @@ The server checks its settings as it starts, and a missing or wrong one stops th
 
 ### The database
 
-The server needs PostgreSQL 18 or SQL Server 2022 or later. Give it two logins: an owner of the tables, which the
-setup alone uses, and a login for the server that may read and write rows and nothing more (on SQL Server,
-`db_datareader` and `db_datawriter`). Then set the database up, with the owner's connection string:
+The server needs PostgreSQL 18 or SQL Server 2022 or later, and a database that keeps text as UTF-8: the setup
+makes its database so, and a database made beforehand needs the UTF8 encoding on PostgreSQL, or a UTF-8 default
+collation such as `Latin1_General_100_CI_AS_SC_UTF8` on SQL Server. Give it two logins: an owner of the tables,
+which the setup alone uses, and a login for the server that may read and write rows and nothing more (on SQL
+Server, `db_datareader` and `db_datawriter`). Then set the database up, with the owner's connection string:
 
     GrayMint.Wallet.Server setup --ConnectionStrings:WalletDatabase="..." --WalletServer:DatabaseProvider=PostgreSql
 

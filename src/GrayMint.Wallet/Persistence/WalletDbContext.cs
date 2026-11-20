@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using GrayMint.Wallet.Persistence.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace GrayMint.Wallet.Persistence;
 
@@ -29,6 +30,15 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
     {
         var dialect = WalletDialect.For(Database);
         modelBuilder.HasDefaultSchema(WalletSchema.Name);
+        // the database the setup makes keeps text as UTF-8, which a varchar parameter needs on SQL Server
+        modelBuilder.UseCollation(dialect.DatabaseCollation);
+
+        // Every text column through here: UTF-8 on both databases, a byte a character of ASCII, and two texts one only
+        // when every character is the same, its case too.
+        void Text(PropertyBuilder property, int maxLength)
+        {
+            property.HasMaxLength(dialect.TextLength(maxLength)).IsUnicode(false).UseCollation(dialect.TextCollation);
+        }
 
         modelBuilder.Entity<WalletModel>(entity => {
             entity.ToTable(WalletSchema.WalletsTable, table => {
@@ -40,10 +50,9 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
                     "\"PostedIn\" - \"PostedOut\" - \"PendingOut\" >= \"MinAvailableBalance\"");
             });
             entity.HasKey(x => x.WalletId);
-            entity.Property(x => x.OwnerReferenceKey).HasMaxLength(WalletLimits.MaxOwnerReferenceKeyLength)
-                .UseCollation(dialect.TextCollation);
-            entity.Property(x => x.WalletCode).HasMaxLength(WalletLimits.MaxCodeLength).UseCollation(dialect.TextCollation);
-            entity.Property(x => x.Currency).HasMaxLength(WalletLimits.MaxCurrencyLength).UseCollation(dialect.TextCollation);
+            Text(entity.Property(x => x.OwnerReferenceKey), WalletLimits.MaxOwnerReferenceKeyLength);
+            Text(entity.Property(x => x.WalletCode), WalletLimits.MaxCodeLength);
+            Text(entity.Property(x => x.Currency), WalletLimits.MaxCurrencyLength);
             entity.Property(x => x.MinAvailableBalance).HasPrecision(AmountPrecision, WalletLimits.AmountScale);
             entity.Property(x => x.PostedIn).HasPrecision(AmountPrecision, WalletLimits.AmountScale).HasDefaultValue(0m);
             entity.Property(x => x.PostedOut).HasPrecision(AmountPrecision, WalletLimits.AmountScale).HasDefaultValue(0m);
@@ -69,11 +78,10 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
                     "AND \"PendingTransferId\" IS NOT NULL)");
             });
             entity.HasKey(x => x.TransferId);
-            entity.Property(x => x.Currency).HasMaxLength(WalletLimits.MaxCurrencyLength).UseCollation(dialect.TextCollation);
-            entity.Property(x => x.Type).HasConversion<string>().HasMaxLength(20).UseCollation(dialect.TextCollation);
-            entity.Property(x => x.ExternalReferenceKey).HasMaxLength(WalletLimits.MaxExternalReferenceKeyLength)
-                .UseCollation(dialect.TextCollation);
-            entity.Property(x => x.PurposeCode).HasMaxLength(WalletLimits.MaxCodeLength).UseCollation(dialect.TextCollation);
+            Text(entity.Property(x => x.Currency), WalletLimits.MaxCurrencyLength);
+            Text(entity.Property(x => x.Type).HasConversion<string>(), 20);
+            Text(entity.Property(x => x.ExternalReferenceKey), WalletLimits.MaxExternalReferenceKeyLength);
+            Text(entity.Property(x => x.PurposeCode), WalletLimits.MaxCodeLength);
             entity.Property(x => x.Amount).HasPrecision(AmountPrecision, WalletLimits.AmountScale);
             entity.Property(x => x.CreatedTime).HasDefaultValueSql(dialect.UtcNowSql).HasConversion(ToUtc, AsUtc);
 

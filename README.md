@@ -82,7 +82,11 @@ login that may make tables; it can run any number of times:
 await app.Services.UseGrayMintWallet(cancellationToken);
 ```
 
-The host refuses to start on a database without the wallet's tables, or with tables of another version.
+The host refuses to start on a database without the wallet's tables, or with tables of another version, or that
+doesn't keep text as UTF-8. A PostgreSQL database does by default. On SQL Server, give the host's database a UTF-8
+default collation, such as `Latin1_General_100_CI_AS_SC_UTF8` (`modelBuilder.UseCollation(...)` in the host's context
+makes it so; `ALTER DATABASE ... COLLATE ...` changes one there already): SQL Server sends text in the database's own
+code page, and a letter outside it would arrive as `?`.
 
 The host injects the wallet's services where it needs them: `WalletService` for wallets,
 `WalletTransferService` for transfers, and `WalletReconciliationService` for reconciliation. Move money

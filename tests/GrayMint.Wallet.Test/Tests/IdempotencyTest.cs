@@ -2,6 +2,7 @@ using GrayMint.Wallet.Exceptions;
 using GrayMint.Wallet.Server;
 using GrayMint.Wallet.Test.Helper;
 using GrayMint.Wallet.Transfers;
+using GrayMint.Wallet.Wallets;
 
 namespace GrayMint.Wallet.Test.Tests;
 
@@ -136,5 +137,51 @@ public class IdempotencyTest(TestContext testContext)
 
         await using var scope = testWallet.CreateScope();
         Assert.AreEqual(7m, (await scope.Transfers.GetByExternalReferenceKey(TestWallet.TenantId, "ORDER-1", CancellationToken)).Amount);
+    }
+
+    // Text of any script, at its longest, comes back as it was sent, and two keys that differ in their last letter
+    // are two keys. On SQL Server a varchar keeps such letters only under a UTF-8 collation, and its length counts
+    // bytes: 字 takes 3, the most a .NET character takes.
+    [TestMethod, EveryDatabase]
+    public async Task TextOfAnyScriptIsKeptWhole(WalletDatabaseProvider provider)
+    {
+        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        var source = await testWallet.CreateSource(CancellationToken);
+        await using var scope = testWallet.CreateScope();
+        var owner = new string('字', WalletLimits.MaxOwnerReferenceKeyLength);
+        var code = new string('ک', WalletLimits.MaxCodeLength);
+        var wallet = await scope.Wallets.Create(TestWallet.TenantId, new WalletCreateRequest {
+            OwnerReferenceKey = owner,
+            WalletCode = code,
+            Currency = "USD",
+            MinAvailableBalance = 0
+        }, CancellationToken);
+
+        var purposeCode = new string('字', WalletLimits.MaxCodeLength);
+        var key = new string('字', WalletLimits.MaxExternalReferenceKeyLength - 1);
+        var first = await scope.Transfers.Create(TestWallet.TenantId, [Pay(key + "一", 5)], CancellationToken);
+        var second = await scope.Transfers.Create(TestWallet.TenantId, [Pay(key + "二", 7)], CancellationToken);
+
+        Assert.AreNotEqual(first[0].TransferId, second[0].TransferId);
+        var read = await testWallet.GetWallet(wallet.WalletId, CancellationToken);
+        Assert.AreEqual(owner, read.OwnerReferenceKey);
+        Assert.AreEqual(code, read.WalletCode);
+        Assert.AreEqual(12m, read.PostedBalance);
+        var transfer = await scope.Transfers.GetByExternalReferenceKey(TestWallet.TenantId, key + "二", CancellationToken);
+        Assert.AreEqual(second[0].TransferId, transfer.TransferId);
+        Assert.AreEqual(key + "二", transfer.ExternalReferenceKey);
+        Assert.AreEqual(purposeCode, transfer.PurposeCode);
+        return;
+
+        WalletTransferCreateRequest Pay(string externalReferenceKey, decimal amount)
+        {
+            return new WalletTransferCreateRequest {
+                ExternalReferenceKey = externalReferenceKey,
+                FromWalletId = source.WalletId,
+                ToWalletId = wallet.WalletId,
+                Amount = amount,
+                PurposeCode = purposeCode
+            };
+        }
     }
 }
