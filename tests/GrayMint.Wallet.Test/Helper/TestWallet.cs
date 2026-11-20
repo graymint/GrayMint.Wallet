@@ -45,8 +45,15 @@ public sealed class TestWallet : IAsyncDisposable
     public static async Task<TestWallet> Create(WalletDatabaseProvider provider, CancellationToken cancellationToken)
     {
         var testWallet = new TestWallet(provider);
-        await testWallet.Setup(cancellationToken);
-        return testWallet;
+        try {
+            await testWallet.Setup(cancellationToken);
+            return testWallet;
+        }
+        catch {
+            // no test gets it to drop, so its database goes here
+            await testWallet.DisposeAsync();
+            throw;
+        }
     }
 
     // only a name: a setup of the test's choice makes the database

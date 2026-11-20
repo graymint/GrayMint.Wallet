@@ -30,10 +30,17 @@ public sealed class TestHost : IAsyncDisposable
     public static async Task<TestHost> Create(WalletDatabaseProvider provider, CancellationToken cancellationToken)
     {
         var host = new TestHost(TestWallet.CreateEmpty(provider));
-        await using (var scope = host.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.EnsureCreatedAsync(cancellationToken);
-        await host._serviceProvider.UseGrayMintWallet(cancellationToken);
-        return host;
+        try {
+            await using (var scope = host.CreateScope())
+                await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.EnsureCreatedAsync(cancellationToken);
+            await host._serviceProvider.UseGrayMintWallet(cancellationToken);
+            return host;
+        }
+        catch {
+            // no test gets it to drop, so its database goes here
+            await host.DisposeAsync();
+            throw;
+        }
     }
 
     public AsyncServiceScope CreateScope()

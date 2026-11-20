@@ -34,8 +34,15 @@ public sealed class TestWalletServer : IAsyncDisposable
         for (var i = 0; i < keys.Count; i++)
             settings[$"WalletServer:ApiKeys:{i}"] = keys[i];
 
-        await Program.Main(["setup", .. settings.Select(x => $"--{x.Key}={x.Value}")]);
-        return new TestWalletServer(database, keys, settings);
+        try {
+            await Program.Main(["setup", .. settings.Select(x => $"--{x.Key}={x.Value}")]);
+            return new TestWalletServer(database, keys, settings);
+        }
+        catch {
+            // no test gets it to drop, so its database goes here
+            await database.DisposeAsync();
+            throw;
+        }
     }
 
     // 32 random bytes in base64, as docs/deployment.md makes a key
