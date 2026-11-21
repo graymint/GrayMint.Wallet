@@ -155,7 +155,7 @@ and how the wallet is built in [docs/design.md](https://github.com/graymint/Gray
 You need the .NET 10 SDK and Docker.
 
 ```bash
-docker compose up -d   # PostgreSQL 18 on 127.0.0.1:5436 and SQL Server 2025 on 127.0.0.1:14336
+docker compose up -d   # PostgreSQL 19 on 127.0.0.1:5436 and SQL Server 2025 on 127.0.0.1:14336
 dotnet test
 ```
 

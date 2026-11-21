@@ -5,7 +5,7 @@ services:
   # Port 5436 lets it run beside other PostgreSQL servers, and it listens on this machine only, since its
   # password is public.
   postgres:
-    image: postgres:18
+    image: postgres:19
     container_name: graymint-wallet-postgres
     # tests run side by side, and some of them make dozens of payments at once
     command: ["postgres", "-c", "max_connections=500"]

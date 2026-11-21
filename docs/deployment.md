@@ -56,7 +56,7 @@ The server checks its settings as it starts, and a missing or wrong one stops th
 
 ### The database
 
-The server needs PostgreSQL 18 or SQL Server 2022 or later, and a database that keeps text as UTF-8: the setup
+The server needs PostgreSQL 18 or later, or SQL Server 2022 or later, and a database that keeps text as UTF-8: the setup
 makes its database so, and a database made beforehand needs the UTF8 encoding on PostgreSQL, or a UTF-8 default
 collation such as `Latin1_General_100_CI_AS_SC_UTF8` on SQL Server. Give it two logins: an owner of the tables,
 which the setup alone uses, and a login for the server that may read and write rows and nothing more (on SQL
