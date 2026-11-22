@@ -7,7 +7,7 @@
 
   <PropertyGroup>
     <!-- One version for the whole solution. Kept in sync with pub/PubVersion.json by the CI bump on every publish. -->
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <FileVersion>$([System.DateTime]::Now.ToString("yyyy.M.d.HHmm"))</FileVersion>
   </PropertyGroup>
 
