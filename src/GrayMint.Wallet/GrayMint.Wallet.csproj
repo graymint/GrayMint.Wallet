@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net10.0</TargetFramework>
+		<TargetFramework>net11.0</TargetFramework>
 		<IsPackable>true</IsPackable>
 		<Description>A double-entry ledger for PostgreSQL and SQL Server, with tables of its own in the host's database and calls that run in the host's own transaction: wallets, transfers that are never changed, pending amounts that are posted or voided, and limits that the database itself holds.</Description>
 		<!-- The public API's docs ship in the package, and a public member without them fails the build. -->
@@ -11,9 +11,8 @@
 
 	<!-- No database provider: the host names its own, and the wallet works on the one it is given. -->
 	<ItemGroup>
-		<PackageReference Include="GrayMint.Common" Version="2.1.310" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
-		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.15" />
+		<PackageReference Include="GrayMint.Common" Version="2.1.318" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="11.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>

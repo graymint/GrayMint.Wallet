@@ -45,7 +45,7 @@ makes them wrong.
 8. **Fail loudly.** A setting that is missing or wrong stops the start, not the first request; so does a
    database without the wallet's tables, with tables of another version, or that doesn't keep text as UTF-8. No
    error is caught just to go on.
-9. **.NET 10**, pinned by `global.json`, until the PostgreSQL provider for the next EF Core is released.
+9. **.NET 11**, named by `global.json`. The move to the next .NET waits for the PostgreSQL provider of its EF Core.
 10. **A change to the tables raises their version.** The start takes tables of `WalletSchema.Version` alone. A
     change to the model raises it, and gives the setup a step that takes tables of the version before to it, with
     a test that runs the step on such tables, in the same change.
