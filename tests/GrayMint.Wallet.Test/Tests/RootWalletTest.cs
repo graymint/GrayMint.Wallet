@@ -2,7 +2,6 @@ using GrayMint.Wallet.Exceptions;
 using GrayMint.Wallet.Server;
 using GrayMint.Wallet.Test.Helper;
 using GrayMint.Wallet.Wallets;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GrayMint.Wallet.Test.Tests;
@@ -38,14 +37,14 @@ public class RootWalletTest(TestContext testContext)
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
         await using var scope = testWallet.CreateScope();
         var root = await scope.Wallets.GetOrCreateRootWallet(TestWallet.TenantId, TestWallet.Currency, CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
-        var other = await testWallet.CreateWallet("other", 0, CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
+        var other = await testWallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken, TestWallet.Request(root, wallet, 10));
         await testWallet.Transfer(CancellationToken, TestWallet.Request(wallet, other, 4));
 
-        Assert.AreEqual(-10m, (await testWallet.GetWallet(root.WalletId, CancellationToken)).PostedBalance);
-        Assert.AreEqual(6m, (await testWallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
-        Assert.AreEqual(4m, (await testWallet.GetWallet(other.WalletId, CancellationToken)).PostedBalance);
+        Assert.AreEqual(-10m, (await testWallet.GetWallet(root.WalletId, cancellationToken: CancellationToken)).PostedBalance);
+        Assert.AreEqual(6m, (await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedBalance);
+        Assert.AreEqual(4m, (await testWallet.GetWallet(other.WalletId, cancellationToken: CancellationToken)).PostedBalance);
     }
 
     // No other wallet is taken for a root, such as one made with a limit a root doesn't have.
@@ -54,7 +53,8 @@ public class RootWalletTest(TestContext testContext)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
         await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
-            testWallet.CreateWallet(WalletService.RootOwnerReferenceKey, 0, CancellationToken));
+            testWallet.CreateWallet(WalletService.RootOwnerReferenceKey, 0, cancellationToken: CancellationToken));
+
         Assert.AreEqual(0L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"Wallets\"", CancellationToken));
     }
 
@@ -68,7 +68,8 @@ public class RootWalletTest(TestContext testContext)
 
         await Assert.ThrowsExactlyAsync<WalletConflictException>(() =>
             scope.Wallets.Update(TestWallet.TenantId, root.WalletId, TestWallet.LimitUpdate(-100), CancellationToken));
-        Assert.IsNull((await testWallet.GetWallet(root.WalletId, CancellationToken)).MinAvailableBalance);
+
+        Assert.IsNull((await testWallet.GetWallet(root.WalletId, cancellationToken: CancellationToken)).MinAvailableBalance);
         await scope.Wallets.Update(TestWallet.TenantId, root.WalletId, TestWallet.LimitUpdate(null), CancellationToken);
     }
 

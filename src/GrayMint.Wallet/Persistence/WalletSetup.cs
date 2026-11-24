@@ -34,26 +34,7 @@ internal static class WalletSetup
                 await databaseCreator.CreateAsync(cancellationToken);
         }
 
-        // the tables and their version are made together, or neither
-        await using (var session = await WalletSession.Begin(walletDbContext, hostDatabase, isWrite: true,
-                         cancellationToken)) {
-            await ThrowIfNotUtf8(walletDbContext, cancellationToken);
-            var tableCount = await CountTables(walletDbContext, cancellationToken);
-            if (tableCount == 0) {
-                await walletDbContext.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(cancellationToken);
-                walletDbContext.Metadata.Add(new MetadataModel {
-                    MetadataId = WalletDbContext.MetadataRowId, SchemaVersion = WalletSchema.Version
-                });
-                await walletDbContext.SaveChangesAsync(cancellationToken);
-            }
-            else if (tableCount != TableCount)
-                throw new InvalidOperationException(
-                    $"Only some of the wallet's tables are in the schema {WalletSchema.Name}, and the setup " +
-                    "doesn't know how they came to be so. It changed nothing.");
-
-            await session.Commit(cancellationToken);
-        }
-
+        await CreateTables(walletDbContext, hostDatabase, cancellationToken);
         await ThrowIfNotReady(walletDbContext, hostDatabase, cancellationToken);
     }
 
@@ -76,11 +57,38 @@ internal static class WalletSetup
             .AsNoTracking()
             .Select(x => x.SchemaVersion)
             .ToArrayAsync(cancellationToken);
+
         if (versions is not [WalletSchema.Version])
             throw new InvalidOperationException(
                 $"The wallet's tables in the schema {WalletSchema.Name} are of version " +
                 $"{(versions.Length == 0 ? "none" : string.Join(" and ", versions))}, and this build of the wallet " +
                 $"works on version {WalletSchema.Version}.");
+    }
+
+    // The tables and their version are made together, or neither, when none of the tables is there; in a session of
+    // its own, over before ThrowIfNotReady begins one.
+    private static async Task CreateTables(WalletDbContext walletDbContext, HostDatabase? hostDatabase,
+        CancellationToken cancellationToken)
+    {
+        await using var session = await WalletSession.Begin(walletDbContext, hostDatabase, isWrite: true,
+            cancellationToken);
+
+        await ThrowIfNotUtf8(walletDbContext, cancellationToken);
+        var tableCount = await CountTables(walletDbContext, cancellationToken);
+        if (tableCount == 0) {
+            await walletDbContext.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(cancellationToken);
+            walletDbContext.Metadata.Add(new MetadataModel {
+                MetadataId = WalletDbContext.MetadataRowId, SchemaVersion = WalletSchema.Version
+            });
+
+            await walletDbContext.SaveChangesAsync(cancellationToken);
+        }
+        else if (tableCount != TableCount)
+            throw new InvalidOperationException(
+                $"Only some of the wallet's tables are in the schema {WalletSchema.Name}, and the setup " +
+                "doesn't know how they came to be so. It changed nothing.");
+
+        await session.Commit(cancellationToken);
     }
 
     // A strategy that retries on failure refuses a transaction begun outside it, so every call that writes would
@@ -99,6 +107,7 @@ internal static class WalletSetup
         var encoding = await walletDbContext.Database
             .SqlQueryRaw<string>(WalletDialect.For(walletDbContext.Database).DatabaseEncodingSql)
             .SingleAsync(cancellationToken);
+
         if (encoding != "UTF-8")
             throw new InvalidOperationException(
                 $"The wallet's database keeps text in {encoding}, not in UTF-8, and a key in another script would " +

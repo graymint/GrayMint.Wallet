@@ -12,7 +12,7 @@ public class WalletServerOptions
     public required WalletDatabaseProvider DatabaseProvider { get; init; }
 
     // The keys the system calls with. A second one lets a new key take over before the old one goes.
-    public string[] ApiKeys { get; init; } = [];
+    public IReadOnlyList<string> ApiKeys { get; init; } = [];
 
     public static bool IsStrongApiKey(string? apiKey)
     {

@@ -32,14 +32,15 @@ public class ApiDescriptionTest(TestContext testContext)
             foreach (var (method, operationNode) in pathItem?.AsObject() ?? []) {
                 var operation = operationNode?.AsObject() ??
                                 throw new InvalidOperationException($"{path} has no operation.");
+
                 ownTags.UnionWith(operation["tags"]?.AsArray().Select(x => (string?)x).OfType<string>() ?? []);
                 var name = $"{method.ToUpperInvariant()} {path}";
                 if (IsEmpty(operation["summary"]))
                     missing.Add($"{name}: its summary");
 
-                foreach (var parameter in operation["parameters"]?.AsArray() ?? [])
-                    if (IsEmpty(parameter?["description"]))
-                        missing.Add($"{name}: parameter {parameter?["name"]}");
+                missing.AddRange((operation["parameters"]?.AsArray() ?? [])
+                    .Where(parameter => IsEmpty(parameter?["description"]))
+                    .Select(parameter => $"{name}: parameter {parameter?["name"]}"));
 
                 if (operation["requestBody"] is { } requestBody && IsEmpty(requestBody["description"]))
                     missing.Add($"{name}: its body");
@@ -48,9 +49,9 @@ public class ApiDescriptionTest(TestContext testContext)
             }
         }
 
-        foreach (var tag in document["tags"]?.AsArray() ?? [])
-            if (ownTags.Contains((string?)tag?["name"] ?? "") && IsEmpty(tag?["description"]))
-                missing.Add($"section {tag?["name"]}");
+        missing.AddRange((document["tags"]?.AsArray() ?? [])
+            .Where(tag => ownTags.Contains((string?)tag?["name"] ?? "") && IsEmpty(tag?["description"]))
+            .Select(tag => $"section {tag?["name"]}"));
 
         foreach (var name in ownSchemas.Order()) {
             var schema = schemas[name]?.AsObject();

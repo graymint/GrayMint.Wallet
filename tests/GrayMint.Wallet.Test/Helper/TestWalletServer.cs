@@ -31,11 +31,13 @@ public sealed class TestWalletServer : IAsyncDisposable
             ["ConnectionStrings:WalletDatabase"] = database.ConnectionString,
             ["WalletServer:DatabaseProvider"] = provider.ToString()
         };
+
         for (var i = 0; i < keys.Count; i++)
             settings[$"WalletServer:ApiKeys:{i}"] = keys[i];
 
         try {
-            await Program.Main(["setup", .. settings.Select(x => $"--{x.Key}={x.Value}")]);
+            var setupArgs = settings.Select(x => $"--{x.Key}={x.Value}").Prepend("setup").ToArray();
+            await Program.Main(setupArgs);
             return new TestWalletServer(database, keys, settings);
         }
         catch {

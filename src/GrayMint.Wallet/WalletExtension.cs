@@ -25,12 +25,16 @@ public static class WalletExtension
             services.AddScoped(serviceProvider => new WalletRepo(
                 serviceProvider.GetRequiredService<WalletDbContext>(),
                 serviceProvider.GetService<HostDatabase>()));
+
             services.AddScoped(serviceProvider =>
                 new WalletService(serviceProvider.GetRequiredService<WalletRepo>()));
+
             services.AddScoped(serviceProvider =>
                 new WalletTransferService(serviceProvider.GetRequiredService<WalletRepo>()));
+
             services.AddScoped(serviceProvider =>
                 new WalletReconciliationService(serviceProvider.GetRequiredService<WalletRepo>()));
+
             services.AddHostedService<WalletStartup>();
             return services;
         }
@@ -63,8 +67,10 @@ public static class WalletExtension
         {
             services.AddScoped(serviceProvider =>
                 new HostDatabase(serviceProvider.GetRequiredService<THostDbContext>().Database));
+
             services.AddDbContext<WalletDbContext>((serviceProvider, options) => dbOptionsAction(
                 serviceProvider.GetRequiredService<HostDatabase>().Database.GetDbConnection(), options));
+
             return services;
         }
     }
@@ -85,6 +91,7 @@ public static class WalletExtension
             scope.ServiceProvider.GetRequiredService<WalletDbContext>(),
             scope.ServiceProvider.GetService<HostDatabase>(),
             cancellationToken);
+
         return serviceProvider;
     }
 }

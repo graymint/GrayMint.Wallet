@@ -1,5 +1,4 @@
 using GrayMint.Wallet.Server;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GrayMint.Wallet.Test.Helper;
@@ -24,6 +23,7 @@ public sealed class TestHost : IAsyncDisposable
         services.AddGrayMintWallet();
         services.AddGrayMintWalletDb<TestDbContext>((connection, options) =>
             testWallet.UseDatabase(options, connection).AddInterceptors(WalletConnections));
+
         _serviceProvider = services.BuildServiceProvider();
     }
 
@@ -31,8 +31,8 @@ public sealed class TestHost : IAsyncDisposable
     {
         var host = new TestHost(TestWallet.CreateEmpty(provider));
         try {
-            await using (var scope = host.CreateScope())
-                await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.EnsureCreatedAsync(cancellationToken);
+            await using var scope = host.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.EnsureCreatedAsync(cancellationToken);
             await host._serviceProvider.UseGrayMintWallet(cancellationToken);
             return host;
         }

@@ -74,6 +74,7 @@ public sealed class WalletTransferService
                 Amount = request.Amount,
                 PurposeCode = request.PurposeCode
             };
+
             writes.Add(new TransferWrite(transfer, fromChange, toChange));
         }
 
@@ -136,6 +137,7 @@ public sealed class WalletTransferService
         var transfer = await _repo.FindTransferByExternalReferenceKey(dbTenantId, externalReferenceKey, cancellationToken)
                        ?? throw new NotExistsException(
                            $"No transfer has the external reference key {externalReferenceKey} in tenant {tenantId}.");
+
         return transfer.ToDto();
     }
 
@@ -166,10 +168,12 @@ public sealed class WalletTransferService
         await using var session = await _repo.BeginWrite(cancellationToken);
         var pendingTransfers = await _repo.GetTransfersByExternalReferenceKeys(dbTenantId, externalReferenceKeys,
             cancellationToken);
+
         foreach (var key in externalReferenceKeys) {
             var pendingTransfer = pendingTransfers.SingleOrDefault(x => x.ExternalReferenceKey == key)
                                   ?? throw new NotExistsException(
                                       $"No transfer has the external reference key {key} in tenant {tenantId}.");
+
             if (pendingTransfer.Type != WalletTransferType.Pending)
                 throw new WalletConflictException($"Transfer {key} is no pending transfer: it was posted when it was made.");
         }
@@ -192,6 +196,7 @@ public sealed class WalletTransferService
                     throw new WalletConflictException(settlement.Type == WalletTransferType.PostPending
                         ? $"Pending transfer {key} was posted already."
                         : $"Pending transfer {key} was voided already.");
+
                 continue;
             }
 
@@ -209,6 +214,7 @@ public sealed class WalletTransferService
                 PurposeCode = pendingTransfer.PurposeCode,
                 PendingTransferId = pendingTransfer.TransferId
             };
+
             writes.Add(new TransferWrite(settlementModel, fromChange, toChange));
         }
 
@@ -253,6 +259,7 @@ public sealed class WalletTransferService
                 throw new WalletConflictException(
                     $"Tenant {tenantId} has a transfer {madeBefore[0].ExternalReferenceKey} already, which is not one of " +
                     "these linked transfers as sent.");
+
             transfers.Add(transfer.ToDto());
         }
 
@@ -291,11 +298,13 @@ public sealed class WalletTransferService
             ArgumentNullException.ThrowIfNull(request, nameof(requests));
             WalletLimits.ThrowIfInvalidText(request.ExternalReferenceKey, WalletLimits.MaxExternalReferenceKeyLength,
                 nameof(request.ExternalReferenceKey));
+
             if (request.PurposeCode != null)
                 WalletLimits.ThrowIfInvalidText(request.PurposeCode, WalletLimits.MaxCodeLength, nameof(request.PurposeCode));
             if (FromWalletId(request) == ToWalletId(request))
                 throw new ArgumentException($"Transfer {request.ExternalReferenceKey} has one wallet on both sides.",
                     nameof(requests));
+
             WalletLimits.ThrowIfInvalidAmount(request.Amount, nameof(request.Amount));
         }
 

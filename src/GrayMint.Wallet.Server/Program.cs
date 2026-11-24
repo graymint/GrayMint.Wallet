@@ -19,7 +19,8 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         var connectionString = builder.Configuration.GetConnectionString("WalletDatabase")
                                ?? throw new InvalidOperationException("ConnectionStrings:WalletDatabase is missing.");
-        var providerSetting = $"{WalletServerOptions.SectionName}:{nameof(WalletServerOptions.DatabaseProvider)}";
+
+        const string providerSetting = $"{WalletServerOptions.SectionName}:{nameof(WalletServerOptions.DatabaseProvider)}";
         var databaseProvider = builder.Configuration.GetValue<WalletDatabaseProvider?>(providerSetting)
                                ?? throw new InvalidOperationException(
                                    $"{providerSetting} is missing: {string.Join(" or ", Enum.GetNames<WalletDatabaseProvider>())}.");
@@ -42,23 +43,26 @@ public class Program
         builder.Services
             .AddGrayMintCommonServices(new RegisterServicesOptions { AddCors = false })
             .AddWalletApiDocs();
+
         builder.Services.Configure<MvcOptions>(options => options.Filters.Add<ServerFailureFilter>());
 
         // The server's one caller is the system, with one of the server's API keys: one key for the one caller, and a
         // second while a new one takes over. A key that is missing or weak stops the start.
-        var apiKeysSetting = $"{WalletServerOptions.SectionName}:{nameof(WalletServerOptions.ApiKeys)}";
+        const string apiKeysSetting = $"{WalletServerOptions.SectionName}:{nameof(WalletServerOptions.ApiKeys)}";
         builder.Services
             .AddOptions<WalletServerOptions>()
             .BindConfiguration(WalletServerOptions.SectionName)
-            .Validate(x => x.ApiKeys.Length > 0, $"{apiKeysSetting} is missing: the server needs a key.")
+            .Validate(x => x.ApiKeys.Count > 0, $"{apiKeysSetting} is missing: the server needs a key.")
             .Validate(x => x.ApiKeys.All(WalletServerOptions.IsStrongApiKey),
                 $"{apiKeysSetting} holds a weak key: each has at least {WalletServerOptions.MinApiKeyLength} " +
                 "characters and no space at either end, such as 32 random bytes in base64.")
             .ValidateOnStart();
+
         builder.Services
             .AddAuthentication(ApiKeyAuthenticationHandler.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName,
                 null);
+
         builder.Services.AddAuthorization();
         builder.Services.AddGrayMintWallet();
 

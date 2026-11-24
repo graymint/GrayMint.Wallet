@@ -19,7 +19,7 @@ internal sealed class ApiKeyAuthenticationHandler(
     public const string SchemeName = "ApiKey";
     private const string BearerPrefix = "Bearer ";
 
-    private readonly IReadOnlyList<byte[]> _keyHashes = serverOptions.Value.ApiKeys.Select(Hash).ToArray();
+    private readonly IReadOnlyList<ReadOnlyMemory<byte>> _keyHashes = serverOptions.Value.ApiKeys.Select(Hash).ToArray();
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -28,9 +28,10 @@ internal sealed class ApiKeyAuthenticationHandler(
             return Task.FromResult(AuthenticateResult.NoResult());
 
         var hash = Hash(authorization[BearerPrefix.Length..].Trim());
-        var isServersKey = false;
-        foreach (var keyHash in _keyHashes)
-            isServersKey |= CryptographicOperations.FixedTimeEquals(hash, keyHash);
+
+        // | and never Any(): every key is compared, so the time tells nothing of which one matched
+        var isServersKey = _keyHashes.Aggregate(false,
+            (isFound, keyHash) => isFound | CryptographicOperations.FixedTimeEquals(hash.Span, keyHash.Span));
 
         if (!isServersKey)
             return Task.FromResult(AuthenticateResult.Fail("The API key is not one of the server's."));
@@ -40,7 +41,7 @@ internal sealed class ApiKeyAuthenticationHandler(
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }
 
-    private static byte[] Hash(string apiKey)
+    private static ReadOnlyMemory<byte> Hash(string apiKey)
     {
         return SHA256.HashData(Encoding.UTF8.GetBytes(apiKey));
     }

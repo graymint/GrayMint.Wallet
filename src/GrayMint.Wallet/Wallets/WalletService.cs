@@ -49,6 +49,7 @@ public sealed class WalletService
         if (request.MinAvailableBalance != null) {
             WalletLimits.ThrowIfInvalidMinAvailableBalance(request.MinAvailableBalance.Value,
                 nameof(request.MinAvailableBalance));
+
             if (request.MinAvailableBalance > 0)
                 throw new ArgumentException("A new wallet has nothing, so its MinAvailableBalance can't be above 0.",
                     nameof(request));
@@ -61,6 +62,7 @@ public sealed class WalletService
             Currency = request.Currency,
             MinAvailableBalance = request.MinAvailableBalance
         };
+
         var conflict = new WalletConflictException(
             $"Tenant {tenantId} has a wallet {request.WalletCode} in {request.Currency} for {request.OwnerReferenceKey} already.");
 
@@ -92,10 +94,8 @@ public sealed class WalletService
         var dbTenantId = WalletIds.ParseTenantId(tenantId);
         WalletLimits.ThrowIfInvalidCurrency(currency);
 
-        await using (await _repo.BeginRead(cancellationToken)) {
-            if (await _repo.FindWallet(dbTenantId, RootOwnerReferenceKey, RootWalletCode, currency, cancellationToken) is { } found)
-                return found.ToDto();
-        }
+        if (await FindRootWallet(dbTenantId, currency, cancellationToken) is { } found)
+            return found.ToDto();
 
         var root = new WalletModel {
             TenantId = dbTenantId,
@@ -131,6 +131,7 @@ public sealed class WalletService
         await using var session = await _repo.BeginRead(cancellationToken);
         var wallet = await _repo.FindWallet(dbTenantId, dbWalletId, cancellationToken)
                       ?? throw new NotExistsException($"Wallet {walletId} is not in tenant {tenantId}.");
+
         return wallet.ToDto();
     }
 
@@ -192,24 +193,7 @@ public sealed class WalletService
         if (request.MinAvailableBalance?.Value is { } newLimit)
             WalletLimits.ThrowIfInvalidMinAvailableBalance(newLimit, nameof(request.MinAvailableBalance));
 
-        // under the wallet's lock, so a payment can't spend meanwhile what the new limit keeps
-        await using (var session = await _repo.BeginWrite(cancellationToken)) {
-            var wallet = (await _repo.LockWallets(dbTenantId, [dbWalletId], cancellationToken)).Single();
-            if (request.MinAvailableBalance != null) {
-                var minAvailableBalance = request.MinAvailableBalance.Value;
-                if (minAvailableBalance != null && wallet.OwnerReferenceKey == RootOwnerReferenceKey)
-                    throw new WalletConflictException($"Wallet {walletId} is a root wallet, which has no limit.");
-
-                if (minAvailableBalance != null && wallet.AvailableBalance < minAvailableBalance)
-                    throw new WalletConflictException($"Wallet {walletId} has {wallet.AvailableBalance} to spend, " +
-                                                      $"below the {minAvailableBalance} it would have to keep.");
-
-                await _repo.SetMinAvailableBalance(dbWalletId, minAvailableBalance, cancellationToken);
-            }
-
-            await session.Commit(cancellationToken);
-        }
-
+        await UpdateUnderLock(dbTenantId, dbWalletId, walletId, request, cancellationToken);
         return await Get(tenantId, walletId, cancellationToken);
     }
 
@@ -244,6 +228,39 @@ public sealed class WalletService
 
         var transactions = await _repo.GetWalletTransactions(dbTenantId, dbWalletId, dbBeforeTransferId, limit,
             cancellationToken);
+
         return transactions.Select(x => x.ToDto()).ToArray();
+    }
+
+    // A session of its own, over before the caller begins the next: one begun inside another lets go of the host's
+    // transaction.
+    private async Task<WalletModel?> FindRootWallet(int dbTenantId, string currency,
+        CancellationToken cancellationToken)
+    {
+        await using var session = await _repo.BeginRead(cancellationToken);
+        return await _repo.FindWallet(dbTenantId, RootOwnerReferenceKey, RootWalletCode, currency, cancellationToken);
+    }
+
+    // Under the wallet's lock, so a payment can't spend meanwhile what the new limit keeps; in a session of its own,
+    // over before Update reads the wallet in the next.
+    private async Task UpdateUnderLock(int dbTenantId, int dbWalletId, string walletId, WalletUpdateRequest request,
+        CancellationToken cancellationToken)
+    {
+        await using var session = await _repo.BeginWrite(cancellationToken);
+        var wallets = await _repo.LockWallets(dbTenantId, [dbWalletId], cancellationToken);
+        var wallet = wallets.Single();
+        if (request.MinAvailableBalance != null) {
+            var minAvailableBalance = request.MinAvailableBalance.Value;
+            if (minAvailableBalance != null && wallet.OwnerReferenceKey == RootOwnerReferenceKey)
+                throw new WalletConflictException($"Wallet {walletId} is a root wallet, which has no limit.");
+
+            if (minAvailableBalance != null && wallet.AvailableBalance < minAvailableBalance)
+                throw new WalletConflictException($"Wallet {walletId} has {wallet.AvailableBalance} to spend, " +
+                                                  $"below the {minAvailableBalance} it would have to keep.");
+
+            await _repo.SetMinAvailableBalance(dbWalletId, minAvailableBalance, cancellationToken);
+        }
+
+        await session.Commit(cancellationToken);
     }
 }

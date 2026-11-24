@@ -29,6 +29,7 @@ internal static class WalletApiDocs
 
             return Task.CompletedTask;
         }));
+
         return services;
     }
 
@@ -38,6 +39,7 @@ internal static class WalletApiDocs
         var name = assembly.GetManifestResourceNames().Single(x => x.EndsWith(".ApiDocs.ApiIntro.md"));
         using var stream = assembly.GetManifestResourceStream(name) ??
                            throw new InvalidOperationException($"Could not read {name}.");
+
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd().Trim();
     }

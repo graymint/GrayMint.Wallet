@@ -40,22 +40,17 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
         // unasked, so a setup step can drop or change it by name, as SQL Server asks before a column of it changes
         modelBuilder.Model.UseNamedDefaultConstraints(true);
 
-        // Every text column through here: UTF-8 on both databases, a byte a character of ASCII, and two texts one only
-        // when every character is the same, its case too.
-        void Text(PropertyBuilder property, int maxLength)
-        {
-            property.HasMaxLength(dialect.TextLength(maxLength)).IsUnicode(false).UseCollation(dialect.TextCollation);
-        }
-
         modelBuilder.Entity<WalletModel>(entity => {
             entity.ToTable(WalletSchema.WalletsTable, table => {
                 table.HasCheckConstraint(WalletTotalsCheck,
                     "\"PendingOut\" >= 0 AND \"PostedOut\" >= 0 AND \"PendingIn\" >= 0 AND \"PostedIn\" >= 0");
+
                 // the database's own hold on a limit, beside the one WalletChange checks
                 table.HasCheckConstraint(WalletMinAvailableBalanceCheck,
                     "\"MinAvailableBalance\" IS NULL OR " +
                     "\"PostedIn\" - \"PostedOut\" - \"PendingOut\" >= \"MinAvailableBalance\"");
             });
+
             entity.HasKey(x => x.WalletId);
             Text(entity.Property(x => x.OwnerReferenceKey), WalletLimits.MaxOwnerReferenceKeyLength);
             Text(entity.Property(x => x.WalletCode), WalletLimits.MaxCodeLength);
@@ -84,6 +79,7 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
                     "(\"Type\" IN ('PostPending', 'VoidPending') AND \"ExternalReferenceKey\" IS NULL " +
                     "AND \"PendingTransferId\" IS NOT NULL)");
             });
+
             entity.HasKey(x => x.TransferId);
             Text(entity.Property(x => x.Currency), WalletLimits.MaxCurrencyLength);
             Text(entity.Property(x => x.Type).HasConversion<string>(), 20);
@@ -104,6 +100,7 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
                 .HasForeignKey(x => new { x.TenantId, x.Currency, x.FromWalletId })
                 .HasPrincipalKey(x => new { x.TenantId, x.Currency, x.WalletId })
                 .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasOne<WalletModel>().WithMany()
                 .HasForeignKey(x => new { x.TenantId, x.Currency, x.ToWalletId })
                 .HasPrincipalKey(x => new { x.TenantId, x.Currency, x.WalletId })
@@ -132,6 +129,7 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
                 .HasForeignKey(x => new { x.TenantId, x.TransferId })
                 .HasPrincipalKey(x => new { x.TenantId, x.TransferId })
                 .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasOne<WalletModel>().WithMany()
                 .HasForeignKey(x => new { x.TenantId, x.WalletId })
                 .HasPrincipalKey(x => new { x.TenantId, x.WalletId })
@@ -142,8 +140,18 @@ internal sealed class WalletDbContext(DbContextOptions<WalletDbContext> options)
             // one row, so the start reads one version, whatever wrote to the table
             entity.ToTable(WalletSchema.MetadataTable, table =>
                 table.HasCheckConstraint(MetadataOneRowCheck, $"\"MetadataId\" = {MetadataRowId}"));
+
             entity.HasKey(x => x.MetadataId);
             entity.Property(x => x.MetadataId).ValueGeneratedNever();
         });
+
+        return;
+
+        // Every text column through here: UTF-8 on both databases, a byte a character of ASCII, and two texts one only
+        // when every character is the same, its case too.
+        void Text(PropertyBuilder property, int maxLength)
+        {
+            property.HasMaxLength(dialect.TextLength(maxLength)).IsUnicode(false).UseCollation(dialect.TextCollation);
+        }
     }
 }

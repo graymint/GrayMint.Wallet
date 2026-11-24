@@ -19,29 +19,29 @@ public class HostTransactionTest(TestContext testContext)
     public async Task OrderAndItsMoneyCommitTogether(WalletDatabaseProvider provider)
     {
         await using var host = await TestHost.Create(provider, CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
 
-        await using (var scope = host.CreateScope()) {
-            var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
-            var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
-            var walletService = scope.ServiceProvider.GetRequiredService<WalletService>();
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken);
-            dbContext.Orders.Add(new TestOrder { Name = "paid" });
-            await dbContext.SaveChangesAsync(CancellationToken);
-            await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
-                CancellationToken);
-            Assert.AreEqual(10m, (await walletService.Get(TestWallet.TenantId, wallet.WalletId,
-                CancellationToken)).PostedBalance);
+        await using var scope = host.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+        var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
+        var walletService = scope.ServiceProvider.GetRequiredService<WalletService>();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken);
+        dbContext.Orders.Add(new TestOrder { Name = "paid" });
+        await dbContext.SaveChangesAsync(CancellationToken);
+        await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
+            CancellationToken);
 
-            // Nothing is seen outside before the host commits. SQL Server, unless the database reads committed
-            // rows by their versions, would make the outside wait for the host's lock instead.
-            if (provider == WalletDatabaseProvider.PostgreSql)
-                Assert.AreEqual(0m, (await host.Wallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
-            await transaction.CommitAsync(CancellationToken);
-        }
+        Assert.AreEqual(10m, (await walletService.Get(TestWallet.TenantId, wallet.WalletId,
+            CancellationToken)).PostedBalance);
 
-        Assert.AreEqual(10m, (await host.Wallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
+        // Nothing is seen outside before the host commits. SQL Server, unless the database reads committed
+        // rows by their versions, would make the outside wait for the host's lock instead.
+        if (provider == WalletDatabaseProvider.PostgreSql)
+            Assert.AreEqual(0m, (await host.Wallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedBalance);
+        await transaction.CommitAsync(CancellationToken);
+
+        Assert.AreEqual(10m, (await host.Wallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedBalance);
         Assert.AreEqual(1L, await host.Wallet.Count("SELECT count(*) FROM \"Orders\"", CancellationToken));
     }
 
@@ -49,26 +49,26 @@ public class HostTransactionTest(TestContext testContext)
     public async Task OrderAndItsMoneyRollBackTogether(WalletDatabaseProvider provider)
     {
         await using var host = await TestHost.Create(provider, CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
-        var other = await host.Wallet.CreateWallet("other", 0, CancellationToken);
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
+        var other = await host.Wallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
 
-        await using (var scope = host.CreateScope()) {
-            var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
-            var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken);
-            dbContext.Orders.Add(new TestOrder { Name = "rolled back" });
-            await dbContext.SaveChangesAsync(CancellationToken);
-            await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
-                CancellationToken);
+        await using var scope = host.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+        var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken);
+        dbContext.Orders.Add(new TestOrder { Name = "rolled back" });
+        await dbContext.SaveChangesAsync(CancellationToken);
+        await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
+            CancellationToken);
 
-            // a refused payment of the same order leaves the host's transaction to the host
-            await Assert.ThrowsExactlyAsync<InsufficientFundsException>(() => transferService.Create(
-                TestWallet.TenantId, [TestWallet.Request(wallet, other, 11)], CancellationToken));
-            await transaction.RollbackAsync(CancellationToken);
-        }
+        // a refused payment of the same order leaves the host's transaction to the host
+        await Assert.ThrowsExactlyAsync<InsufficientFundsException>(() => transferService.Create(
+            TestWallet.TenantId, [TestWallet.Request(wallet, other, 11)], CancellationToken));
 
-        Assert.AreEqual(0m, (await host.Wallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
+        await transaction.RollbackAsync(CancellationToken);
+
+        Assert.AreEqual(0m, (await host.Wallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedBalance);
         Assert.AreEqual(0L, await host.Wallet.Count("SELECT count(*) FROM \"Orders\"", CancellationToken));
         Assert.AreEqual(0L, await host.Wallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
     }
@@ -84,44 +84,48 @@ public class HostTransactionTest(TestContext testContext)
             "ALTER TABLE gmwallet.\"Transfers\" ADD CONSTRAINT \"CK_Transfers_HostsRule\" " +
             "CHECK (\"PurposeCode\" IS NULL OR \"PurposeCode\" <> 'refused')",
             CancellationToken);
+
         await host.Wallet.Execute(
             "ALTER TABLE gmwallet.\"Wallets\" ADD CONSTRAINT \"CK_Wallets_HostsRule\" " +
             "CHECK (\"OwnerReferenceKey\" <> 'refused')",
             CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
+
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         var refused = TestWallet.Request(source, wallet, 5);
 
-        await using (var scope = host.CreateScope()) {
-            var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
-            var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
-            var walletService = scope.ServiceProvider.GetRequiredService<WalletService>();
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken);
-            var transferRefusal = await Assert.ThrowsAsync<DbUpdateException>(() => transferService.Create(
-                TestWallet.TenantId, [
-                    TestWallet.Request(source, wallet, 10),
-                    new WalletTransferCreateRequest {
-                        ExternalReferenceKey = refused.ExternalReferenceKey, FromWalletId = refused.FromWalletId,
-                        ToWalletId = refused.ToWalletId, Amount = refused.Amount, PurposeCode = "refused"
-                    }
-                ], CancellationToken));
-            Assert.Contains("CK_Transfers_HostsRule", transferRefusal.InnerException?.Message ?? "");
+        await using var scope = host.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+        var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
+        var walletService = scope.ServiceProvider.GetRequiredService<WalletService>();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken);
+        var transferRefusal = await Assert.ThrowsAsync<DbUpdateException>(() => transferService.Create(
+            TestWallet.TenantId, [
+                TestWallet.Request(source, wallet, 10),
+                new WalletTransferCreateRequest {
+                    ExternalReferenceKey = refused.ExternalReferenceKey, FromWalletId = refused.FromWalletId,
+                    ToWalletId = refused.ToWalletId, Amount = refused.Amount, PurposeCode = "refused"
+                }
+            ], CancellationToken));
 
-            // a refused wallet goes the same way
-            var walletRefusal = await Assert.ThrowsAsync<DbUpdateException>(() => walletService.Create(
-                TestWallet.TenantId, new WalletCreateRequest {
-                    OwnerReferenceKey = "refused", WalletCode = "credit", Currency = "USD", MinAvailableBalance = 0
-                }, CancellationToken));
-            Assert.Contains("CK_Wallets_HostsRule", walletRefusal.InnerException?.Message ?? "");
+        Assert.Contains("CK_Transfers_HostsRule", transferRefusal.InnerException?.Message ?? "");
 
-            dbContext.Orders.Add(new TestOrder { Name = "after the refusal" });
-            await dbContext.SaveChangesAsync(CancellationToken);
-            await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 3)],
-                CancellationToken);
-            await transaction.CommitAsync(CancellationToken);
-        }
+        // a refused wallet goes the same way
+        var walletRefusal = await Assert.ThrowsAsync<DbUpdateException>(() => walletService.Create(
+            TestWallet.TenantId, new WalletCreateRequest {
+                OwnerReferenceKey = "refused", WalletCode = "credit", Currency = "USD", MinAvailableBalance = 0
+            }, CancellationToken));
 
-        Assert.AreEqual(3m, (await host.Wallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
+        Assert.Contains("CK_Wallets_HostsRule", walletRefusal.InnerException?.Message ?? "");
+
+        dbContext.Orders.Add(new TestOrder { Name = "after the refusal" });
+        await dbContext.SaveChangesAsync(CancellationToken);
+        await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 3)],
+            CancellationToken);
+
+        await transaction.CommitAsync(CancellationToken);
+
+        Assert.AreEqual(3m, (await host.Wallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedBalance);
         Assert.AreEqual(1L, await host.Wallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
         Assert.AreEqual(1L, await host.Wallet.Count("SELECT count(*) FROM \"Orders\"", CancellationToken));
     }
@@ -135,29 +139,31 @@ public class HostTransactionTest(TestContext testContext)
         await host.Wallet.Execute(
             "ALTER TABLE gmwallet.\"Wallets\" ADD CONSTRAINT \"CK_Wallets_HostsCap\" " +
             "CHECK (\"OwnerReferenceKey\" <> 'capped' OR \"PostedIn\" <= 5)", CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var capped = await host.Wallet.CreateWallet("capped", 0, CancellationToken);
 
-        await using (var scope = host.CreateScope()) {
-            var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
-            var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken);
-            var inHostsTransaction = await Assert.ThrowsAsync<System.Data.Common.DbException>(() =>
-                transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, capped, 10)],
-                    CancellationToken));
-            Assert.Contains("CK_Wallets_HostsCap", inHostsTransaction.Message);
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var capped = await host.Wallet.CreateWallet("capped", 0, cancellationToken: CancellationToken);
 
-            dbContext.Orders.Add(new TestOrder { Name = "after the refusal" });
-            await dbContext.SaveChangesAsync(CancellationToken);
-            await transaction.CommitAsync(CancellationToken);
-        }
+        await using var scope = host.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+        var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(CancellationToken);
+        var inHostsTransaction = await Assert.ThrowsAsync<System.Data.Common.DbException>(() =>
+            transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, capped, 10)],
+                CancellationToken));
+
+        Assert.Contains("CK_Wallets_HostsCap", inHostsTransaction.Message);
+
+        dbContext.Orders.Add(new TestOrder { Name = "after the refusal" });
+        await dbContext.SaveChangesAsync(CancellationToken);
+        await transaction.CommitAsync(CancellationToken);
 
         var inItsOwn = await Assert.ThrowsAsync<System.Data.Common.DbException>(() =>
             host.Wallet.Transfer(CancellationToken, TestWallet.Request(source, capped, 10)));
+
         Assert.Contains("CK_Wallets_HostsCap", inItsOwn.Message);
 
         Assert.AreEqual(0L, await host.Wallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
-        Assert.AreEqual(0m, (await host.Wallet.GetWallet(source.WalletId, CancellationToken)).PostedOut);
+        Assert.AreEqual(0m, (await host.Wallet.GetWallet(source.WalletId, cancellationToken: CancellationToken)).PostedOut);
         Assert.AreEqual(1L, await host.Wallet.Count("SELECT count(*) FROM \"Orders\"", CancellationToken));
     }
 
@@ -171,8 +177,9 @@ public class HostTransactionTest(TestContext testContext)
             "ALTER TABLE gmwallet.\"Transfers\" ADD CONSTRAINT \"CK_Transfers_HostsRule\" " +
             "CHECK (\"PurposeCode\" IS NULL OR \"PurposeCode\" <> 'refused')",
             CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
+
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         var refused = TestWallet.Request(source, wallet, 5);
 
         await using var scope = host.CreateScope();
@@ -188,6 +195,7 @@ public class HostTransactionTest(TestContext testContext)
                     ToWalletId = refused.ToWalletId, Amount = refused.Amount, PurposeCode = "refused"
                 }
             ], CancellationToken));
+
         Assert.Contains("CK_Transfers_HostsRule", exception.InnerException?.Message ?? "");
     }
 
@@ -200,10 +208,10 @@ public class HostTransactionTest(TestContext testContext)
     {
         await using var host = await TestHost.Create(WalletDatabaseProvider.SqlServer, CancellationToken);
         await host.Wallet.Execute("ALTER DATABASE CURRENT SET ALLOW_SNAPSHOT_ISOLATION ON", CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
-        var otherSource = await host.Wallet.CreateWallet("other-source", null, CancellationToken);
-        var other = await host.Wallet.CreateWallet("other", 0, CancellationToken);
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
+        var otherSource = await host.Wallet.CreateWallet("other-source", null, cancellationToken: CancellationToken);
+        var other = await host.Wallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
 
         await using var firstScope = host.CreateScope();
         var firstDbContext = firstScope.ServiceProvider.GetRequiredService<TestDbContext>();
@@ -216,15 +224,17 @@ public class HostTransactionTest(TestContext testContext)
         var secondDbContext = secondScope.ServiceProvider.GetRequiredService<TestDbContext>();
         await using var second = await secondDbContext.Database.BeginTransactionAsync(IsolationLevel.Snapshot,
             CancellationToken);
+
         await secondDbContext.Database.ExecuteSqlRawAsync("SET XACT_ABORT ON", CancellationToken);
         var sameKey = secondScope.ServiceProvider.GetRequiredService<WalletTransferService>().Create(
             TestWallet.TenantId, [TestWallet.Request(otherSource, other, 7, externalReferenceKey: "k")], CancellationToken);
+
         await host.Wallet.WaitForBlockedCalls(1, CancellationToken);
         await first.CommitAsync(CancellationToken);
 
         var exception = await Assert.ThrowsExactlyAsync<DbUpdateException>(() => sameKey);
         Assert.Contains("IX_Transfers_TenantId_ExternalReferenceKey", exception.InnerException?.Message ?? "");
-        Assert.AreEqual(0m, (await host.Wallet.GetWallet(other.WalletId, CancellationToken)).PostedBalance);
+        Assert.AreEqual(0m, (await host.Wallet.GetWallet(other.WalletId, cancellationToken: CancellationToken)).PostedBalance);
     }
 
     // A wallet or a key that another call made meanwhile, and had not committed when this call looked for it, is
@@ -233,10 +243,10 @@ public class HostTransactionTest(TestContext testContext)
     public async Task WhatAnotherCallMadeMeanwhileIsAConflict(WalletDatabaseProvider provider)
     {
         await using var host = await TestHost.Create(provider, CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
-        var otherSource = await host.Wallet.CreateWallet("other-source", null, CancellationToken);
-        var other = await host.Wallet.CreateWallet("other", 0, CancellationToken);
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
+        var otherSource = await host.Wallet.CreateWallet("other-source", null, cancellationToken: CancellationToken);
+        var other = await host.Wallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
 
         await using var scope = host.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
@@ -246,18 +256,19 @@ public class HostTransactionTest(TestContext testContext)
         await walletService.Create(TestWallet.TenantId, new WalletCreateRequest {
             OwnerReferenceKey = "new", WalletCode = "credit", Currency = "USD", MinAvailableBalance = 0
         }, CancellationToken);
+
         await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 5, externalReferenceKey: "k")],
             CancellationToken);
 
         // another call on wallets of its own, waiting for this transaction's rows
-        var sameWallet = host.Wallet.CreateWallet("new", 0, CancellationToken);
+        var sameWallet = host.Wallet.CreateWallet("new", 0, cancellationToken: CancellationToken);
         var sameKey = host.Wallet.Transfer(CancellationToken, TestWallet.Request(otherSource, other, 7, externalReferenceKey: "k"));
         await host.Wallet.WaitForBlockedCalls(2, CancellationToken);
         await transaction.CommitAsync(CancellationToken);
 
         await Assert.ThrowsExactlyAsync<WalletConflictException>(() => sameWallet);
         await Assert.ThrowsExactlyAsync<WalletConflictException>(() => sameKey);
-        Assert.AreEqual(0m, (await host.Wallet.GetWallet(other.WalletId, CancellationToken)).PostedBalance);
+        Assert.AreEqual(0m, (await host.Wallet.GetWallet(other.WalletId, cancellationToken: CancellationToken)).PostedBalance);
     }
 
     // One scope, several of the host's transactions one after another, and calls between them in their own.
@@ -265,33 +276,32 @@ public class HostTransactionTest(TestContext testContext)
     public async Task WalletFollowsTheHostsTransactionsOneAfterAnother(WalletDatabaseProvider provider)
     {
         await using var host = await TestHost.Create(provider, CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
 
-        await using (var scope = host.CreateScope()) {
-            var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
-            var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
-            var walletService = scope.ServiceProvider.GetRequiredService<WalletService>();
-            await using (var committed = await dbContext.Database.BeginTransactionAsync(CancellationToken)) {
-                await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
-                    CancellationToken);
-                await committed.CommitAsync(CancellationToken);
-            }
+        await using var scope = host.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+        var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
+        var walletService = scope.ServiceProvider.GetRequiredService<WalletService>();
+        await using var committed = await dbContext.Database.BeginTransactionAsync(CancellationToken);
+        await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
+            CancellationToken);
 
-            await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 5)],
-                CancellationToken);
+        await committed.CommitAsync(CancellationToken);
 
-            await using (var rolledBack = await dbContext.Database.BeginTransactionAsync(CancellationToken)) {
-                await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 100)],
-                    CancellationToken);
-                await rolledBack.RollbackAsync(CancellationToken);
-            }
+        await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 5)],
+            CancellationToken);
 
-            Assert.AreEqual(15m, (await walletService.Get(TestWallet.TenantId, wallet.WalletId,
-                CancellationToken)).PostedBalance);
-        }
+        await using var rolledBack = await dbContext.Database.BeginTransactionAsync(CancellationToken);
+        await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 100)],
+            CancellationToken);
 
-        Assert.AreEqual(15m, (await host.Wallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
+        await rolledBack.RollbackAsync(CancellationToken);
+
+        Assert.AreEqual(15m, (await walletService.Get(TestWallet.TenantId, wallet.WalletId,
+            CancellationToken)).PostedBalance);
+
+        Assert.AreEqual(15m, (await host.Wallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedBalance);
     }
 
     // The wallet's context is its own, so a call never saves what the host has not saved.
@@ -299,19 +309,18 @@ public class HostTransactionTest(TestContext testContext)
     public async Task WalletLeavesTheHostsUnsavedChangesAlone(WalletDatabaseProvider provider)
     {
         await using var host = await TestHost.Create(provider, CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
 
-        await using (var scope = host.CreateScope()) {
-            var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
-            var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
-            dbContext.Orders.Add(new TestOrder { Name = "not saved" });
-            await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
-                CancellationToken);
-        }
+        await using var scope = host.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+        var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
+        dbContext.Orders.Add(new TestOrder { Name = "not saved" });
+        await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
+            CancellationToken);
 
         Assert.AreEqual(0L, await host.Wallet.Count("SELECT count(*) FROM \"Orders\"", CancellationToken));
-        Assert.AreEqual(10m, (await host.Wallet.GetWallet(wallet.WalletId, CancellationToken)).PostedBalance);
+        Assert.AreEqual(10m, (await host.Wallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedBalance);
     }
 
     // The host's context opens the connection, so a host's interceptor that tells the database who a connection
@@ -320,17 +329,17 @@ public class HostTransactionTest(TestContext testContext)
     public async Task HostOpensTheWalletsConnection(WalletDatabaseProvider provider)
     {
         await using var host = await TestHost.Create(provider, CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         var hostOpenedBefore = host.HostConnections.OpenedCount;
 
-        await using (var scope = host.CreateScope()) {
-            var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
-            var walletService = scope.ServiceProvider.GetRequiredService<WalletService>();
-            await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
-                CancellationToken);
-            await walletService.Get(TestWallet.TenantId, wallet.WalletId, CancellationToken);
-        }
+        await using var scope = host.CreateScope();
+        var transferService = scope.ServiceProvider.GetRequiredService<WalletTransferService>();
+        var walletService = scope.ServiceProvider.GetRequiredService<WalletService>();
+        await transferService.Create(TestWallet.TenantId, [TestWallet.Request(source, wallet, 10)],
+            CancellationToken);
+
+        await walletService.Get(TestWallet.TenantId, wallet.WalletId, CancellationToken);
 
         Assert.IsGreaterThan(hostOpenedBefore, host.HostConnections.OpenedCount);
         Assert.AreEqual(0, host.WalletConnections.OpenedCount);

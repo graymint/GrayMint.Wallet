@@ -35,8 +35,8 @@ internal sealed class WalletDialect(
             FOR UPDATE
             """,
         // a statement reads every row as it was when the statement began
-        walletsAtOneMomentSql: $$"""
-            SELECT * FROM {{WalletSchema.Name}}."{{WalletSchema.WalletsTable}}"
+        walletsAtOneMomentSql: $"""
+            SELECT * FROM {WalletSchema.Name}."{WalletSchema.WalletsTable}"
             """);
 
     private static readonly WalletDialect SqlServer = new(
@@ -64,9 +64,7 @@ internal sealed class WalletDialect(
         // Row by row, unless the database reads committed rows by their versions, a read would see one wallet of a
         // transfer before the write and the other after it. TABLOCK's shared lock of the table waits for the writes
         // under way, and holds new ones off until the statement ends.
-        walletsAtOneMomentSql: $$"""
-            SELECT * FROM [{{WalletSchema.Name}}].[{{WalletSchema.WalletsTable}}] WITH (TABLOCK)
-            """);
+        walletsAtOneMomentSql: $"SELECT * FROM [{WalletSchema.Name}].[{WalletSchema.WalletsTable}] WITH (TABLOCK)");
 
     // the time the database writes on a new row, in UTC
     public string UtcNowSql { get; } = utcNowSql;

@@ -107,14 +107,14 @@ public sealed class TestWallet : IAsyncDisposable
     }
 
     // a wallet with no limit, which money comes from, as a host's cash wallet
-    public async Task<WalletInfo> CreateSource(CancellationToken cancellationToken, string tenantId = TenantId,
-        string currency = Currency)
+    public async Task<WalletInfo> CreateSource(string tenantId = TenantId, string currency = Currency,
+        CancellationToken cancellationToken = default)
     {
-        return await CreateWallet("source", null, cancellationToken, tenantId, currency);
+        return await CreateWallet("source", null, tenantId, currency, cancellationToken);
     }
 
     public async Task<WalletInfo> CreateWallet(string ownerReferenceKey, decimal? minAvailableBalance,
-        CancellationToken cancellationToken, string tenantId = TenantId, string currency = Currency)
+        string tenantId = TenantId, string currency = Currency, CancellationToken cancellationToken = default)
     {
         await using var scope = CreateScope();
         return await scope.Wallets.Create(tenantId, new WalletCreateRequest {
@@ -125,8 +125,8 @@ public sealed class TestWallet : IAsyncDisposable
         }, cancellationToken);
     }
 
-    public async Task<WalletInfo> GetWallet(string walletId, CancellationToken cancellationToken,
-        string tenantId = TenantId)
+    public async Task<WalletInfo> GetWallet(string walletId, string tenantId = TenantId,
+        CancellationToken cancellationToken = default)
     {
         await using var scope = CreateScope();
         return await scope.Wallets.Get(tenantId, walletId, cancellationToken);
@@ -139,6 +139,7 @@ public sealed class TestWallet : IAsyncDisposable
         await using var scope = CreateScope();
         var transactions = await scope.Wallets.GetTransactions(wallet.TenantId, wallet.WalletId, null,
             WalletLimits.MaxPageSize, cancellationToken);
+
         return transactions.Reverse().ToArray();
     }
 
@@ -204,6 +205,7 @@ public sealed class TestWallet : IAsyncDisposable
         var sql = Provider == WalletDatabaseProvider.PostgreSql
             ? "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"
             : "SELECT COUNT(*) FROM sys.dm_exec_requests WHERE database_id = DB_ID() AND blocking_session_id <> 0";
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         while (await Count(sql, timeout.Token) < count)
@@ -220,47 +222,39 @@ public sealed class TestWallet : IAsyncDisposable
 
     // The test's database, keeping text in a single-byte code page, as an old database might: LATIN1 on PostgreSQL,
     // SQL_Latin1_General_CP1_CI_AS on SQL Server.
-    public async Task CreateDatabaseWithoutUtf8(CancellationToken cancellationToken)
+    public Task CreateDatabaseWithoutUtf8(CancellationToken cancellationToken)
     {
-        if (Provider == WalletDatabaseProvider.PostgreSql) {
-            await using var connection = new NpgsqlConnection($"{PostgreSqlServer};Database=postgres;Pooling=false");
-            await connection.OpenAsync(cancellationToken);
-            await using var command = new NpgsqlCommand(
-                $"CREATE DATABASE \"{DatabaseName}\" ENCODING 'LATIN1' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0",
-                connection);
-            await command.ExecuteNonQueryAsync(cancellationToken);
-            return;
-        }
-
-        await using (var connection = new SqlConnection($"{SqlServerServer};Database=master;Pooling=false")) {
-            await connection.OpenAsync(cancellationToken);
-            await using var command = new SqlCommand(
-                $"CREATE DATABASE [{DatabaseName}] COLLATE SQL_Latin1_General_CP1_CI_AS", connection);
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
+        return ExecuteOnServer(Provider == WalletDatabaseProvider.PostgreSql
+            ? $"CREATE DATABASE \"{DatabaseName}\" ENCODING 'LATIN1' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0"
+            : $"CREATE DATABASE [{DatabaseName}] COLLATE SQL_Latin1_General_CP1_CI_AS", cancellationToken);
     }
 
-    // not cancellable: a cancelled test must still drop its database
+    // A deadline of its own, not the test's token: a cancelled test must still drop its database. A minute ends only
+    // a drop the server never answers.
     public async ValueTask DisposeAsync()
     {
         await _serviceProvider.DisposeAsync();
-        if (Provider == WalletDatabaseProvider.PostgreSql) {
-            await using var connection = new NpgsqlConnection($"{PostgreSqlServer};Database=postgres;Pooling=false");
-            await connection.OpenAsync(CancellationToken.None);
-            await using var command = new NpgsqlCommand(
-                $"DROP DATABASE IF EXISTS \"{DatabaseName}\" WITH (FORCE)", connection);
-            await command.ExecuteNonQueryAsync(CancellationToken.None);
-            return;
-        }
+        if (Provider == WalletDatabaseProvider.SqlServer)
+            SqlConnection.ClearPool(new SqlConnection(ConnectionString));
 
-        SqlConnection.ClearPool(new SqlConnection(ConnectionString));
-        await using (var connection = new SqlConnection($"{SqlServerServer};Database=master;Pooling=false")) {
-            await connection.OpenAsync(CancellationToken.None);
-            await using var command = new SqlCommand(
-                $"IF DB_ID(N'{DatabaseName}') IS NOT NULL BEGIN " +
-                $"ALTER DATABASE [{DatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; " +
-                $"DROP DATABASE [{DatabaseName}]; END", connection);
-            await command.ExecuteNonQueryAsync(CancellationToken.None);
-        }
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+        await ExecuteOnServer(Provider == WalletDatabaseProvider.PostgreSql
+            ? $"DROP DATABASE IF EXISTS \"{DatabaseName}\" WITH (FORCE)"
+            : $"IF DB_ID(N'{DatabaseName}') IS NOT NULL BEGIN " +
+              $"ALTER DATABASE [{DatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; " +
+              $"DROP DATABASE [{DatabaseName}]; END", deadline.Token);
+    }
+
+    // a command on the server's own database, for one that makes or drops the test's
+    private async Task ExecuteOnServer(string sql, CancellationToken cancellationToken)
+    {
+        await using DbConnection connection = Provider == WalletDatabaseProvider.PostgreSql
+            ? new NpgsqlConnection($"{PostgreSqlServer};Database=postgres;Pooling=false")
+            : new SqlConnection($"{SqlServerServer};Database=master;Pooling=false");
+
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }

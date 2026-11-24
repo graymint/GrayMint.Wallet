@@ -72,12 +72,14 @@ public sealed class WalletReconciliationService
     {
         await using var session = await _repo.BeginWrite(cancellationToken);
         await _repo.LockWallets(wallet.TenantId, [wallet.WalletId], cancellationToken);
-        var discrepancy = (await _repo.GetWalletDiscrepancies(wallet.WalletId, cancellationToken)).SingleOrDefault();
+        var discrepancies = await _repo.GetWalletDiscrepancies(wallet.WalletId, cancellationToken);
+        var discrepancy = discrepancies.SingleOrDefault();
         if (discrepancy == null)
             return null;
 
         var lastTransaction = await _repo.GetWalletTransactions(wallet.TenantId, wallet.WalletId,
             beforeTransferId: null, limit: 1, cancellationToken);
+
         return discrepancy.ToDto(lastTransaction.SingleOrDefault());
     }
 }

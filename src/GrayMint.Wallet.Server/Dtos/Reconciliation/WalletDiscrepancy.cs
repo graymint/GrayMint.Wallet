@@ -1,7 +1,7 @@
 namespace GrayMint.Wallet.Server.Dtos.Reconciliation;
 
 // inside the namespace: from outside, Wallet would name the namespace GrayMint.Wallet
-using GrayMint.Wallet.Server.Dtos.Wallets;
+using Wallets;
 
 /// <summary>
 /// A wallet whose totals are not what its transfers add up to, or whose balances are not the ones its newest wallet

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -10,7 +9,6 @@ using GrayMint.Wallet.Server.Dtos.Reconciliation;
 using GrayMint.Wallet.Server.Dtos.Wallets;
 using GrayMint.Wallet.Server.Dtos.Transfers;
 using GrayMint.Wallet.Test.Helper;
-using GrayMint.Wallet.Transfers;
 using ServerWallet = GrayMint.Wallet.Server.Dtos.Wallets.Wallet;
 
 namespace GrayMint.Wallet.Test.Tests;
@@ -65,6 +63,7 @@ public class ServerTest(TestContext testContext)
         var wallet = await CreateWallet(client, "owner", 0);
         await Post<IReadOnlyList<Transfer>>(client, "/api/tenants/1/transfers",
             new[] { Request(source, wallet, 4, isPending: true, externalReferenceKey: "held") });
+
         var settlements = await Post<IReadOnlyList<Transfer>>(client, "/api/tenants/1/transfers/post", new[] { "held" });
 
         var walletJson = await client.GetStringAsync($"/api/tenants/1/wallets/{wallet.WalletId}", CancellationToken);
@@ -73,6 +72,7 @@ public class ServerTest(TestContext testContext)
 
         var transactionsJson = await client.GetStringAsync(
             $"/api/tenants/1/wallets/{wallet.WalletId}/transactions?limit=10", CancellationToken);
+
         Assert.Contains($"\"walletId\":\"{wallet.WalletId}\"", transactionsJson);
         Assert.Contains($"\"transferId\":\"{settlements[0].TransferId}\"", transactionsJson);
         Assert.Contains($"\"pendingTransferId\":\"{settlements[0].PendingTransferId}\"", transactionsJson);
@@ -83,6 +83,7 @@ public class ServerTest(TestContext testContext)
         var older = await client.GetFromJsonAsync<IReadOnlyList<WalletTransaction>>(
             $"/api/tenants/1/wallets/{wallet.WalletId}/transactions?limit=10&beforeTransferId={settlements[0].TransferId}",
             CancellationToken);
+
         Assert.AreEqual(settlements[0].PendingTransferId, older?.Single().Transfer.TransferId);
     }
 
@@ -96,16 +97,19 @@ public class ServerTest(TestContext testContext)
         var wallet = await CreateWallet(client, "owner", 0);
         await Post<IReadOnlyList<Transfer>>(client, "/api/tenants/1/transfers",
             new[] { Request(source, wallet, 4, isPending: true, externalReferenceKey: "held") });
+
         await Post<IReadOnlyList<Transfer>>(client, "/api/tenants/1/transfers/post", new[] { "held" });
 
         var transactions = await client.GetFromJsonAsync<IReadOnlyList<WalletTransaction>>(
                                $"/api/tenants/1/wallets/{source.WalletId}/transactions?limit=10", CancellationToken)
                            ?? throw new InvalidOperationException("No transactions.");
-        CollectionAssert.AreEqual(new[] { TransferType.PostPending, TransferType.Pending },
+
+        Assert.AreSequenceEqual([TransferType.PostPending, TransferType.Pending],
             transactions.Select(x => x.Transfer.Type).ToArray());
-        CollectionAssert.AreEqual(new[] { -4m, -4m }, transactions.Select(x => x.Amount).ToArray());
-        CollectionAssert.AreEqual(new[] { -4m, 0m }, transactions.Select(x => x.PostedBalance).ToArray());
-        CollectionAssert.AreEqual(new[] { -4m, -4m }, transactions.Select(x => x.AvailableBalance).ToArray());
+
+        Assert.AreSequenceEqual([-4m, -4m], transactions.Select(x => x.Amount).ToArray());
+        Assert.AreSequenceEqual([-4m, 0m], transactions.Select(x => x.PostedBalance).ToArray());
+        Assert.AreSequenceEqual([-4m, -4m], transactions.Select(x => x.AvailableBalance).ToArray());
     }
 
     // An id that is no number names nothing, as one that is not there.
@@ -129,7 +133,8 @@ public class ServerTest(TestContext testContext)
         // null where a transfer belongs is a request wrong in itself, answered 400 with what is missing; a null
         // dereference would answer 500, as a failure of the server's own.
         using var nothing = await client.PostAsync("/api/tenants/1/transfers",
-            new StringContent("[null]", System.Text.Encoding.UTF8, "application/json"), CancellationToken);
+            new StringContent("[null]", Encoding.UTF8, "application/json"), CancellationToken);
+
         Assert.AreEqual(HttpStatusCode.BadRequest, nothing.StatusCode);
         Assert.Contains("One of the linked transfers is missing",
             await nothing.Content.ReadAsStringAsync(CancellationToken));
@@ -137,6 +142,7 @@ public class ServerTest(TestContext testContext)
         using var transfer = await client.PostAsJsonAsync("/api/tenants/1/transfers", new[] {
             new TransferCreateRequest { ExternalReferenceKey = "k", FromWalletId = "abc", ToWalletId = wallet.WalletId, Amount = 1 }
         }, CancellationToken);
+
         Assert.AreEqual(HttpStatusCode.NotFound, transfer.StatusCode);
     }
 
@@ -150,6 +156,7 @@ public class ServerTest(TestContext testContext)
 
         using var overdraft = await client.PostAsJsonAsync("/api/tenants/1/transfers",
             new[] { Request(wallet, other, 1) }, CancellationToken);
+
         Assert.AreEqual(HttpStatusCode.Conflict, overdraft.StatusCode);
 
         using var otherTenant = await client.GetAsync($"/api/tenants/2/wallets/{wallet.WalletId}", CancellationToken);
@@ -157,11 +164,13 @@ public class ServerTest(TestContext testContext)
 
         using var invalid = await client.PostAsJsonAsync("/api/tenants/1/transfers",
             new[] { Request(wallet, other, 0) }, CancellationToken);
+
         Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
 
         using var twice = await client.PostAsJsonAsync("/api/tenants/1/wallets", new WalletCreateRequest {
             OwnerReferenceKey = "owner", WalletCode = "credit", Currency = "USD", MinAvailableBalance = 0
         }, CancellationToken);
+
         Assert.AreEqual(HttpStatusCode.Conflict, twice.StatusCode);
     }
 
@@ -178,6 +187,7 @@ public class ServerTest(TestContext testContext)
 
         using var response = await client.PostAsJsonAsync("/api/tenants/1/transfers",
             new[] { Request(source, wallet, 1) }, CancellationToken);
+
         Assert.AreEqual(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
@@ -191,21 +201,22 @@ public class ServerTest(TestContext testContext)
         using var anonymous = server.CreateClient();
         var description = JsonNode.Parse(await anonymous.GetStringAsync("/openapi/v1.json", CancellationToken))
                           ?.AsObject() ?? throw new InvalidOperationException("No description.");
+
         var operations = (description["paths"]?.AsObject() ?? [])
             .SelectMany(path => (path.Value?.AsObject() ?? []).Select(method => (
                 Method: new HttpMethod(method.Key.ToUpperInvariant()),
                 Address: Regex.Replace(path.Key, "{[^}]+}", "1"))))
             .ToArray();
-        Assert.IsTrue(operations.Length >= 10, $"Only {operations.Length} addresses are described.");
+
+        Assert.IsGreaterThanOrEqualTo(10, operations.Length, $"Only {operations.Length} addresses are described.");
 
         var key = server.ApiKeys[0];
-        string?[] refusedAuthorizations =
+        IReadOnlyList<string?> refusedAuthorizations =
             [null, $"Bearer {TestWalletServer.CreateApiKey()}", $"Bearer {key}x", $"Bearer {key[..^1]}", key];
         foreach (var (method, address) in operations)
         foreach (var authorization in refusedAuthorizations) {
-            using var request = new HttpRequestMessage(method, address) {
-                Content = method == HttpMethod.Get ? null : new StringContent("{}", Encoding.UTF8, "application/json")
-            };
+            using var request = new HttpRequestMessage(method, address);
+            request.Content = method == HttpMethod.Get ? null : new StringContent("{}", Encoding.UTF8, "application/json");
             if (authorization != null)
                 request.Headers.TryAddWithoutValidation("Authorization", authorization);
 
@@ -233,10 +244,11 @@ public class ServerTest(TestContext testContext)
     [TestMethod]
     public async Task ServerWithoutAStrongKeyDoesNotStart()
     {
-        string[][] weakKeys = [[], ["a-key-a-person-made-up"], [$" {TestWalletServer.CreateApiKey()}"]];
+        IReadOnlyList<IReadOnlyList<string>> weakKeys =
+            [[], ["a-key-a-person-made-up"], [$" {TestWalletServer.CreateApiKey()}"]];
         foreach (var apiKeys in weakKeys) {
             await using var server = await TestWalletServer.Create(WalletDatabaseProvider.PostgreSql, apiKeys);
-            var exception = Assert.Throws<Exception>(() => server.CreateClient());
+            var exception = Assert.Throws<Exception>(server.CreateClient);
             Assert.Contains("WalletServer:ApiKeys", exception.ToString());
         }
     }
@@ -271,18 +283,22 @@ public class ServerTest(TestContext testContext)
         Assert.AreEqual(held[0].TransferId, voided[0].PendingTransferId);
         var afterVoid = await client.GetFromJsonAsync<ServerWallet>($"/api/tenants/1/wallets/{wallet.WalletId}",
             CancellationToken);
+
         Assert.AreEqual(0m, afterVoid?.PendingIn);
         Assert.AreEqual(0m, afterVoid?.PostedBalance);
 
         using var limit = await client.PatchAsJsonAsync($"/api/tenants/1/wallets/{wallet.WalletId}",
             new WalletUpdateRequest { MinAvailableBalance = new Patch<decimal?>(-50) }, CancellationToken);
+
         Assert.AreEqual(HttpStatusCode.OK, limit.StatusCode);
         Assert.AreEqual(-50m, (await limit.Content.ReadFromJsonAsync<ServerWallet>(CancellationToken))?.MinAvailableBalance);
 
         var root = await client.GetFromJsonAsync<ServerWallet>("/api/tenants/1/wallets/root?currency=USD",
             CancellationToken) ?? throw new InvalidOperationException("No root wallet.");
+
         using var rootLimit = await client.PatchAsJsonAsync($"/api/tenants/1/wallets/{root.WalletId}",
             new WalletUpdateRequest { MinAvailableBalance = new Patch<decimal?>(0) }, CancellationToken);
+
         Assert.AreEqual(HttpStatusCode.Conflict, rootLimit.StatusCode);
     }
 
@@ -294,11 +310,13 @@ public class ServerTest(TestContext testContext)
         using var client = server.CreateSystemClient();
         var root = await client.GetFromJsonAsync<ServerWallet>("/api/tenants/1/wallets/root?currency=USD",
             CancellationToken) ?? throw new InvalidOperationException("No root wallet.");
+
         var wallet = await CreateWallet(client, "owner", 0);
         await Post<IReadOnlyList<Transfer>>(client, "/api/tenants/1/transfers", new[] { Request(root, wallet, 10) });
 
         var rootAfter = await client.GetFromJsonAsync<ServerWallet>("/api/tenants/1/wallets/root?currency=USD",
             CancellationToken);
+
         Assert.AreEqual(root.WalletId, rootAfter?.WalletId);
         Assert.AreEqual(-10m, rootAfter?.PostedBalance);
         Assert.IsNull(rootAfter?.MinAvailableBalance);
@@ -317,6 +335,7 @@ public class ServerTest(TestContext testContext)
 
         var reconciled = await client.GetFromJsonAsync<ReconciliationReport>("/api/reconciliation", CancellationToken)
                          ?? throw new InvalidOperationException("No report.");
+
         Assert.IsTrue(reconciled.IsReconciled);
         Assert.AreEqual(2, reconciled.WalletCount);
         Assert.IsEmpty(reconciled.WalletDiscrepancies);
@@ -325,8 +344,10 @@ public class ServerTest(TestContext testContext)
         await server.Database.Execute(
             $"UPDATE gmwallet.\"Wallets\" SET \"PostedIn\" = 11 WHERE \"WalletId\" = {wallet.WalletId}",
             CancellationToken);
+
         var report = await client.GetFromJsonAsync<ReconciliationReport>("/api/reconciliation", CancellationToken)
                      ?? throw new InvalidOperationException("No report.");
+
         Assert.IsFalse(report.IsReconciled);
         var discrepancy = report.WalletDiscrepancies.Single();
         Assert.AreEqual(wallet.WalletId, discrepancy.Wallet.WalletId);

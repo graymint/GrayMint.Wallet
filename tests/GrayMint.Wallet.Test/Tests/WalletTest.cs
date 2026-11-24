@@ -16,7 +16,7 @@ public class WalletTest(TestContext testContext)
     public async Task WalletIsOneForItsOwnerCodeAndCurrency(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner-1", 0, CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner-1", 0, cancellationToken: CancellationToken);
         Assert.AreEqual(TestWallet.TenantId, wallet.TenantId);
         Assert.AreEqual("owner-1", wallet.OwnerReferenceKey);
         Assert.AreEqual(0m, wallet.MinAvailableBalance);
@@ -26,15 +26,15 @@ public class WalletTest(TestContext testContext)
         // the database's time, in UTC on either database
         Assert.AreEqual(DateTimeKind.Utc, wallet.CreatedTime.Kind);
         Assert.IsLessThan(TimeSpan.FromMinutes(1), (DateTime.UtcNow - wallet.CreatedTime).Duration());
-        Assert.AreEqual(wallet.CreatedTime, (await testWallet.GetWallet(wallet.WalletId, CancellationToken)).CreatedTime);
+        Assert.AreEqual(wallet.CreatedTime, (await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).CreatedTime);
 
         await Assert.ThrowsExactlyAsync<WalletConflictException>(() =>
-            testWallet.CreateWallet("owner-1", null, CancellationToken));
+            testWallet.CreateWallet("owner-1", null, cancellationToken: CancellationToken));
 
         // another currency, another tenant, an owner that differs in case: other wallets
-        await testWallet.CreateWallet("owner-1", 0, CancellationToken, currency: "EUR");
-        await testWallet.CreateWallet("owner-1", 0, CancellationToken, tenantId: "2");
-        await testWallet.CreateWallet("OWNER-1", 0, CancellationToken);
+        await testWallet.CreateWallet("owner-1", 0, currency: "EUR", cancellationToken: CancellationToken);
+        await testWallet.CreateWallet("owner-1", 0, tenantId: "2", cancellationToken: CancellationToken);
+        await testWallet.CreateWallet("OWNER-1", 0, cancellationToken: CancellationToken);
 
         await using var scope = testWallet.CreateScope();
         var found = await scope.Wallets.Find(TestWallet.TenantId, "owner-1", "credit", "USD", CancellationToken);
@@ -59,8 +59,10 @@ public class WalletTest(TestContext testContext)
 
         await Assert.ThrowsAsync<ArgumentException>(() => scope.Wallets.Create(TestWallet.TenantId,
             Request("owner", " credit", "USD", 0), CancellationToken));
+
         await Assert.ThrowsAsync<ArgumentException>(() => scope.Wallets.Create(TestWallet.TenantId,
             Request("owner", new string('c', WalletLimits.MaxCodeLength + 1), "USD", 0), CancellationToken));
+
         await Assert.ThrowsAsync<ArgumentException>(() => scope.Wallets.Create(TestWallet.TenantId,
             Request("owner", "credit", "USD", -WalletLimits.MaxAmount - 1), CancellationToken));
 
@@ -80,7 +82,7 @@ public class WalletTest(TestContext testContext)
     public async Task WalletLookupIsChecked(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        await testWallet.CreateWallet("owner", 0, CancellationToken);
+        await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         await using var scope = testWallet.CreateScope();
 
         foreach (var (ownerReferenceKey, code, currency) in new[] {
@@ -88,8 +90,10 @@ public class WalletTest(TestContext testContext)
                  })
             await Assert.ThrowsAsync<ArgumentException>(() => scope.Wallets.Find(TestWallet.TenantId,
                 ownerReferenceKey, code, currency, CancellationToken), $"{ownerReferenceKey}|{code}|{currency}");
+
         await Assert.ThrowsAsync<ArgumentException>(() =>
             scope.Wallets.GetByOwner(TestWallet.TenantId, "owner ", CancellationToken));
+
         Assert.IsNotNull(await scope.Wallets.Find(TestWallet.TenantId, "owner", "credit", "USD", CancellationToken));
     }
 
@@ -97,16 +101,17 @@ public class WalletTest(TestContext testContext)
     public async Task WalletOfAnotherTenantIsNotThere(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken, tenantId: "2");
+        var wallet = await testWallet.CreateWallet("owner", 0, tenantId: "2", cancellationToken: CancellationToken);
 
         await Assert.ThrowsExactlyAsync<NotExistsException>(() =>
-            testWallet.GetWallet(wallet.WalletId, CancellationToken, tenantId: "1"));
+            testWallet.GetWallet(wallet.WalletId, tenantId: "1", cancellationToken: CancellationToken));
+
         await using var scope = testWallet.CreateScope();
         await Assert.ThrowsExactlyAsync<NotExistsException>(() =>
             scope.Wallets.Update("1", wallet.WalletId, TestWallet.LimitUpdate(-10), CancellationToken));
 
         // and nothing of it was changed on the way
-        Assert.AreEqual(0m, (await testWallet.GetWallet(wallet.WalletId, CancellationToken, tenantId: "2")).MinAvailableBalance);
+        Assert.AreEqual(0m, (await testWallet.GetWallet(wallet.WalletId, tenantId: "2", cancellationToken: CancellationToken)).MinAvailableBalance);
     }
 
     // Ids are text, and one that is no number, or a number beyond the key's type, names nothing: every call takes it
@@ -115,28 +120,33 @@ public class WalletTest(TestContext testContext)
     public async Task IdThatIsNoNumberIsNotThere(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         await using var scope = testWallet.CreateScope();
 
         foreach (var walletId in new[] { "abc", "-1", " 1", "1.0", "2147483648" })
             await Assert.ThrowsExactlyAsync<NotExistsException>(() =>
                 scope.Wallets.Get(TestWallet.TenantId, walletId, CancellationToken), walletId);
+
         await Assert.ThrowsExactlyAsync<NotExistsException>(() =>
             scope.Wallets.Get("one", wallet.WalletId, CancellationToken));
+
         await Assert.ThrowsExactlyAsync<NotExistsException>(() => scope.Wallets.Create("one",
             Request("owner", "credit", "USD", 0), CancellationToken));
+
         await Assert.ThrowsExactlyAsync<NotExistsException>(() => scope.Transfers.Create(TestWallet.TenantId, [
             new WalletTransferCreateRequest {
                 ExternalReferenceKey = "k", FromWalletId = source.WalletId, ToWalletId = "x", Amount = 1
             }
         ], CancellationToken));
+
         await Assert.ThrowsExactlyAsync<NotExistsException>(() => scope.Wallets.GetTransactions(TestWallet.TenantId,
             wallet.WalletId, beforeTransferId: "x", 10, CancellationToken));
 
         // an id given as the wallet gives it names the wallet
         Assert.AreEqual(wallet.WalletId,
             (await scope.Wallets.Get(TestWallet.TenantId, wallet.WalletId, CancellationToken)).WalletId);
+
         Assert.AreEqual(0L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"Transfers\"", CancellationToken));
     }
 
@@ -144,15 +154,16 @@ public class WalletTest(TestContext testContext)
     public async Task MinAvailableBalanceIsSetOnlyWhileTheWalletKeepsToIt(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 10));
 
         await using var scope = testWallet.CreateScope();
         Assert.AreEqual(5m, (await scope.Wallets.Update(TestWallet.TenantId, wallet.WalletId, TestWallet.LimitUpdate(5), CancellationToken)).MinAvailableBalance);
         await Assert.ThrowsExactlyAsync<WalletConflictException>(() =>
             scope.Wallets.Update(TestWallet.TenantId, wallet.WalletId, TestWallet.LimitUpdate(10.5m), CancellationToken));
-        Assert.AreEqual(5m, (await testWallet.GetWallet(wallet.WalletId, CancellationToken)).MinAvailableBalance);
+
+        Assert.AreEqual(5m, (await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).MinAvailableBalance);
 
         Assert.AreEqual(-100m, (await scope.Wallets.Update(TestWallet.TenantId, wallet.WalletId, TestWallet.LimitUpdate(-100), CancellationToken)).MinAvailableBalance);
         Assert.AreEqual(-100m, (await scope.Wallets.Update(TestWallet.TenantId, wallet.WalletId, new WalletUpdateRequest(), CancellationToken)).MinAvailableBalance);

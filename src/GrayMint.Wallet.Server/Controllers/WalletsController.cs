@@ -111,6 +111,7 @@ public class WalletsController(WalletService walletService) : ControllerBase
     {
         var transactions = await walletService.GetTransactions(tenantId, walletId, beforeTransferId, limit,
             cancellationToken);
+
         return transactions.Select(x => x.ToDto()).ToArray();
     }
 }

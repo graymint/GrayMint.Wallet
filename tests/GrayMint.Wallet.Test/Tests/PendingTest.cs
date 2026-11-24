@@ -16,18 +16,19 @@ public class PendingTest(TestContext testContext)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
         var wallet = await CreateFunded(testWallet, 10);
-        var other = await testWallet.CreateWallet("other", 0, CancellationToken);
+        var other = await testWallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
 
         await testWallet.Transfer(CancellationToken, TestWallet.Request(wallet, other, 6, isPending: true, externalReferenceKey: "hold"));
-        wallet = await testWallet.GetWallet(wallet.WalletId, CancellationToken);
+        wallet = await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken);
         Assert.AreEqual(10m, wallet.PostedBalance);
         Assert.AreEqual(4m, wallet.AvailableBalance);
-        other = await testWallet.GetWallet(other.WalletId, CancellationToken);
+        other = await testWallet.GetWallet(other.WalletId, cancellationToken: CancellationToken);
         Assert.AreEqual(6m, other.PendingIn);
         Assert.AreEqual(0m, other.AvailableBalance);
 
         await Assert.ThrowsExactlyAsync<InsufficientFundsException>(() =>
             testWallet.Transfer(CancellationToken, TestWallet.Request(wallet, other, 5)));
+
         await Assert.ThrowsExactlyAsync<InsufficientFundsException>(() =>
             testWallet.Transfer(CancellationToken, TestWallet.Request(other, wallet, 1)));
     }
@@ -37,7 +38,7 @@ public class PendingTest(TestContext testContext)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
         var wallet = await CreateFunded(testWallet, 10);
-        var other = await testWallet.CreateWallet("other", 0, CancellationToken);
+        var other = await testWallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken,
             TestWallet.Request(wallet, other, 6, isPending: true, externalReferenceKey: "post-me"),
             TestWallet.Request(wallet, other, 3, isPending: true, externalReferenceKey: "void-me"));
@@ -52,11 +53,11 @@ public class PendingTest(TestContext testContext)
         var pending = await scope.Transfers.GetByExternalReferenceKey(TestWallet.TenantId, "post-me", CancellationToken);
         Assert.AreEqual(posted[0].TransferId, (await scope.Transfers.FindSettlement(TestWallet.TenantId, pending.TransferId, CancellationToken))?.TransferId);
 
-        wallet = await testWallet.GetWallet(wallet.WalletId, CancellationToken);
+        wallet = await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken);
         Assert.AreEqual(0m, wallet.PendingOut);
         Assert.AreEqual(6m, wallet.PostedOut);
         Assert.AreEqual(4m, wallet.AvailableBalance);
-        other = await testWallet.GetWallet(other.WalletId, CancellationToken);
+        other = await testWallet.GetWallet(other.WalletId, cancellationToken: CancellationToken);
         Assert.AreEqual(0m, other.PendingIn);
         Assert.AreEqual(6m, other.AvailableBalance);
     }
@@ -66,7 +67,7 @@ public class PendingTest(TestContext testContext)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
         var wallet = await CreateFunded(testWallet, 10);
-        var other = await testWallet.CreateWallet("other", 0, CancellationToken);
+        var other = await testWallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken,
             TestWallet.Request(wallet, other, 6, isPending: true, externalReferenceKey: "p1"),
             TestWallet.Request(wallet, other, 2, isPending: true, externalReferenceKey: "p2"));
@@ -80,11 +81,12 @@ public class PendingTest(TestContext testContext)
         var both = await scope.Transfers.PostPending(TestWallet.TenantId, ["p2", "p1"], CancellationToken);
         Assert.AreEqual(first[0].TransferId, both[1].TransferId);
         Assert.AreEqual(2m, both[0].Amount);
-        Assert.AreEqual(8m, (await testWallet.GetWallet(wallet.WalletId, CancellationToken)).PostedOut);
+        Assert.AreEqual(8m, (await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedOut);
 
         await Assert.ThrowsExactlyAsync<WalletConflictException>(() =>
             scope.Transfers.VoidPending(TestWallet.TenantId, ["p1"], CancellationToken));
-        Assert.AreEqual(8m, (await testWallet.GetWallet(other.WalletId, CancellationToken)).PostedBalance);
+
+        Assert.AreEqual(8m, (await testWallet.GetWallet(other.WalletId, cancellationToken: CancellationToken)).PostedBalance);
     }
 
     [TestMethod, EveryDatabase]
@@ -92,7 +94,7 @@ public class PendingTest(TestContext testContext)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
         var wallet = await CreateFunded(testWallet, 10);
-        var other = await testWallet.CreateWallet("other", 0, CancellationToken);
+        var other = await testWallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken, TestWallet.Request(wallet, other, 1, externalReferenceKey: "posted"));
         await testWallet.Transfer(CancellationToken, TestWallet.Request(wallet, other, 1, isPending: true, externalReferenceKey: "voided"));
 
@@ -101,16 +103,22 @@ public class PendingTest(TestContext testContext)
 
         await Assert.ThrowsExactlyAsync<WalletConflictException>(() =>
             scope.Transfers.PostPending(TestWallet.TenantId, ["posted"], CancellationToken));
+
         await Assert.ThrowsExactlyAsync<WalletConflictException>(() =>
             scope.Transfers.PostPending(TestWallet.TenantId, ["voided"], CancellationToken));
+
         await Assert.ThrowsExactlyAsync<NotExistsException>(() =>
             scope.Transfers.PostPending(TestWallet.TenantId, ["nothing"], CancellationToken));
+
         await Assert.ThrowsExactlyAsync<NotExistsException>(() =>
             scope.Transfers.PostPending("2", ["voided"], CancellationToken));
+
         await Assert.ThrowsAsync<ArgumentException>(() =>
             scope.Transfers.PostPending(TestWallet.TenantId, ["voided", "voided"], CancellationToken));
+
         await Assert.ThrowsAsync<ArgumentException>(() =>
             scope.Transfers.PostPending(TestWallet.TenantId, [], CancellationToken));
+
         await Assert.ThrowsAsync<ArgumentException>(() =>
             scope.Transfers.PostPending(TestWallet.TenantId, ["voided "], CancellationToken));
     }
@@ -121,9 +129,9 @@ public class PendingTest(TestContext testContext)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
         var wallet = await CreateFunded(testWallet, 10);
-        var other = await testWallet.CreateWallet("other", 0, CancellationToken);
-        var source2 = await testWallet.CreateSource(CancellationToken, tenantId: "2");
-        var wallet2 = await testWallet.CreateWallet("owner", 0, CancellationToken, tenantId: "2");
+        var other = await testWallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
+        var source2 = await testWallet.CreateSource(tenantId: "2", cancellationToken: CancellationToken);
+        var wallet2 = await testWallet.CreateWallet("owner", 0, tenantId: "2", cancellationToken: CancellationToken);
 
         await using var scope = testWallet.CreateScope();
         await scope.Transfers.Create(TestWallet.TenantId,
@@ -133,9 +141,9 @@ public class PendingTest(TestContext testContext)
 
         var settlements = await scope.Transfers.PostPending(TestWallet.TenantId, ["held"], CancellationToken);
         Assert.AreEqual(TestWallet.TenantId, settlements.Single().TenantId);
-        Assert.AreEqual(3m, (await testWallet.GetWallet(other.WalletId, CancellationToken)).PostedIn);
+        Assert.AreEqual(3m, (await testWallet.GetWallet(other.WalletId, cancellationToken: CancellationToken)).PostedIn);
         Assert.IsNull(await scope.Transfers.FindSettlement("2", heldInTenant2[0].TransferId, CancellationToken));
-        Assert.AreEqual(4m, (await testWallet.GetWallet(wallet2.WalletId, CancellationToken, tenantId: "2")).PendingIn);
+        Assert.AreEqual(4m, (await testWallet.GetWallet(wallet2.WalletId, tenantId: "2", cancellationToken: CancellationToken)).PendingIn);
 
         // a settlement is looked up in its tenant
         var settled = settlements.Single().PendingTransferId ?? throw new InvalidOperationException("No pending id.");
@@ -145,8 +153,8 @@ public class PendingTest(TestContext testContext)
 
     private async Task<Wallets.WalletInfo> CreateFunded(TestWallet testWallet, decimal amount)
     {
-        var source = await testWallet.CreateSource(CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, amount));
         return wallet;
     }

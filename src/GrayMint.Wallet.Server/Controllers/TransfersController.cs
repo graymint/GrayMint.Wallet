@@ -87,6 +87,7 @@ public class TransfersController(WalletTransferService transferService) : Contro
     {
         var transfer = await transferService.GetByExternalReferenceKey(tenantId, externalReferenceKey,
             cancellationToken);
+
         return transfer.ToDto();
     }
 }

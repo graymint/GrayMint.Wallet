@@ -12,32 +12,23 @@ namespace GrayMint.Wallet.Persistence;
 // and a session begun inside another would let go of the transaction the outer one began there.
 // The context is the wallet's own, so a save writes only the row added here; the tracker is emptied after each, and
 // every read is untracked.
-internal sealed class WalletRepo
+internal sealed class WalletRepo(WalletDbContext dbContext, HostDatabase? hostDatabase)
 {
-    private readonly WalletDbContext _dbContext;
-    private readonly HostDatabase? _hostDatabase;
-    private readonly WalletDialect _dialect;
-
-    public WalletRepo(WalletDbContext dbContext, HostDatabase? hostDatabase)
-    {
-        _dbContext = dbContext;
-        _hostDatabase = hostDatabase;
-        _dialect = WalletDialect.For(dbContext.Database);
-    }
+    private readonly WalletDialect _dialect = WalletDialect.For(dbContext.Database);
 
     public Task<WalletSession> BeginRead(CancellationToken cancellationToken)
     {
-        return WalletSession.Begin(_dbContext, _hostDatabase, isWrite: false, cancellationToken);
+        return WalletSession.Begin(dbContext, hostDatabase, isWrite: false, cancellationToken);
     }
 
     public Task<WalletSession> BeginWrite(CancellationToken cancellationToken)
     {
-        return WalletSession.Begin(_dbContext, _hostDatabase, isWrite: true, cancellationToken);
+        return WalletSession.Begin(dbContext, hostDatabase, isWrite: true, cancellationToken);
     }
 
     public Task<WalletModel?> FindWallet(int tenantId, int walletId, CancellationToken cancellationToken)
     {
-        return _dbContext.Wallets
+        return dbContext.Wallets
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.TenantId == tenantId && x.WalletId == walletId, cancellationToken);
     }
@@ -45,7 +36,7 @@ internal sealed class WalletRepo
     public Task<WalletModel?> FindWallet(int tenantId, string ownerReferenceKey, string walletCode, string currency,
         CancellationToken cancellationToken)
     {
-        return _dbContext.Wallets
+        return dbContext.Wallets
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.TenantId == tenantId && x.OwnerReferenceKey == ownerReferenceKey &&
                                        x.WalletCode == walletCode && x.Currency == currency, cancellationToken);
@@ -54,7 +45,7 @@ internal sealed class WalletRepo
     public async Task<IReadOnlyList<WalletModel>> GetWalletsByOwner(int tenantId, string ownerReferenceKey,
         CancellationToken cancellationToken)
     {
-        return await _dbContext.Wallets
+        return await dbContext.Wallets
             .AsNoTracking()
             .Where(x => x.TenantId == tenantId && x.OwnerReferenceKey == ownerReferenceKey)
             .OrderBy(x => x.WalletId)
@@ -63,7 +54,7 @@ internal sealed class WalletRepo
 
     public Task<bool> HasWallet(WalletModel wallet, CancellationToken cancellationToken)
     {
-        return _dbContext.Wallets.AnyAsync(x =>
+        return dbContext.Wallets.AnyAsync(x =>
             x.TenantId == wallet.TenantId && x.OwnerReferenceKey == wallet.OwnerReferenceKey &&
             x.WalletCode == wallet.WalletCode && x.Currency == wallet.Currency, cancellationToken);
     }
@@ -71,7 +62,7 @@ internal sealed class WalletRepo
     // false when another call made the same wallet meanwhile
     public async Task<bool> TryAddWallet(WalletModel wallet, CancellationToken cancellationToken)
     {
-        _dbContext.Wallets.Add(wallet);
+        dbContext.Wallets.Add(wallet);
         return await TrySave(() => HasWallet(wallet, cancellationToken), cancellationToken);
     }
 
@@ -82,10 +73,11 @@ internal sealed class WalletRepo
     {
         var wallets = new List<WalletModel>();
         foreach (var walletId in walletIds.Distinct().Order()) {
-            var rows = await _dbContext.Wallets
+            var rows = await dbContext.Wallets
                 .FromSqlRaw(_dialect.LockWalletSql, tenantId, walletId)
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
+
             wallets.Add(rows.SingleOrDefault()
                          ?? throw new NotExistsException($"Wallet {walletId} is not in tenant {tenantId}."));
         }
@@ -96,7 +88,7 @@ internal sealed class WalletRepo
     public Task SetMinAvailableBalance(int walletId, decimal? minAvailableBalance,
         CancellationToken cancellationToken)
     {
-        return _dbContext.Wallets
+        return dbContext.Wallets
             .Where(x => x.WalletId == walletId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.MinAvailableBalance, minAvailableBalance),
                 cancellationToken);
@@ -106,7 +98,7 @@ internal sealed class WalletRepo
     public async Task UpdateTotals(IEnumerable<WalletChange> changes, CancellationToken cancellationToken)
     {
         foreach (var change in changes.Where(x => x.IsChanged)) {
-            await _dbContext.Wallets
+            await dbContext.Wallets
                 .Where(x => x.WalletId == change.Wallet.WalletId)
                 .ExecuteUpdateAsync(setters => setters
                         .SetProperty(x => x.PendingOut, x => x.PendingOut + change.PendingOut)
@@ -120,7 +112,7 @@ internal sealed class WalletRepo
     public async Task<IReadOnlyList<TransferModel>> GetTransfersByExternalReferenceKeys(int tenantId,
         IReadOnlyList<string> externalReferenceKeys, CancellationToken cancellationToken)
     {
-        return await _dbContext.Transfers
+        return await dbContext.Transfers
             .AsNoTracking()
             .Where(x => x.TenantId == tenantId && x.ExternalReferenceKey != null &&
                         externalReferenceKeys.Contains(x.ExternalReferenceKey))
@@ -130,7 +122,7 @@ internal sealed class WalletRepo
     public Task<TransferModel?> FindTransferByExternalReferenceKey(int tenantId, string externalReferenceKey,
         CancellationToken cancellationToken)
     {
-        return _dbContext.Transfers
+        return dbContext.Transfers
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.TenantId == tenantId && x.ExternalReferenceKey == externalReferenceKey,
                 cancellationToken);
@@ -139,7 +131,7 @@ internal sealed class WalletRepo
     public async Task<IReadOnlyList<TransferModel>> GetSettlements(int tenantId,
         IReadOnlyList<long> pendingTransferIds, CancellationToken cancellationToken)
     {
-        return await _dbContext.Transfers
+        return await dbContext.Transfers
             .AsNoTracking()
             .Where(x => x.TenantId == tenantId && x.PendingTransferId != null &&
                         pendingTransferIds.Contains(x.PendingTransferId.Value))
@@ -149,7 +141,7 @@ internal sealed class WalletRepo
     public Task<TransferModel?> FindSettlement(int tenantId, long pendingTransferId,
         CancellationToken cancellationToken)
     {
-        return _dbContext.Transfers
+        return dbContext.Transfers
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.TenantId == tenantId && x.PendingTransferId == pendingTransferId,
                 cancellationToken);
@@ -160,11 +152,11 @@ internal sealed class WalletRepo
     public async Task<IReadOnlyList<WalletTransactionView>> GetWalletTransactions(int tenantId, int walletId,
         long? beforeTransferId, int limit, CancellationToken cancellationToken)
     {
-        return await _dbContext.WalletTransactions
+        return await dbContext.WalletTransactions
             .AsNoTracking()
             .Where(x => x.TenantId == tenantId && x.WalletId == walletId &&
                         (beforeTransferId == null || x.TransferId < beforeTransferId))
-            .Join(_dbContext.Transfers, transaction => transaction.TransferId, transfer => transfer.TransferId,
+            .Join(dbContext.Transfers, transaction => transaction.TransferId, transfer => transfer.TransferId,
                 (transaction, transfer) => new WalletTransactionView {
                     WalletTransaction = transaction, Transfer = transfer
                 })
@@ -176,7 +168,7 @@ internal sealed class WalletRepo
     // false when another call took its external reference key, or settled its pending transfer, meanwhile
     public async Task<bool> TryAddTransfer(TransferModel transfer, CancellationToken cancellationToken)
     {
-        _dbContext.Transfers.Add(transfer);
+        dbContext.Transfers.Add(transfer);
         return await TrySave(() => IsTransferTaken(transfer, cancellationToken), cancellationToken);
     }
 
@@ -184,12 +176,12 @@ internal sealed class WalletRepo
     public async Task AddWalletTransactions(IEnumerable<WalletTransactionModel> transactions,
         CancellationToken cancellationToken)
     {
-        _dbContext.WalletTransactions.AddRange(transactions);
+        dbContext.WalletTransactions.AddRange(transactions);
         try {
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
         finally {
-            _dbContext.ChangeTracker.Clear();
+            dbContext.ChangeTracker.Clear();
         }
     }
 
@@ -198,9 +190,9 @@ internal sealed class WalletRepo
     public async Task<IReadOnlyList<WalletReconciliationView>> GetWalletDiscrepancies(int? walletId,
         CancellationToken cancellationToken)
     {
-        var transfers = _dbContext.Transfers;
-        var transactions = _dbContext.WalletTransactions;
-        return await _dbContext.Wallets
+        var transfers = dbContext.Transfers;
+        var transactions = dbContext.WalletTransactions;
+        return await dbContext.Wallets
             .AsNoTracking()
             .Where(x => walletId == null || x.WalletId == walletId)
             .Select(wallet => new WalletReconciliationView {
@@ -248,7 +240,7 @@ internal sealed class WalletRepo
     // Each tenant's wallets in each currency, added up from their rows as they were at one moment.
     public async Task<IReadOnlyList<CurrencyTotalsView>> GetCurrencyTotals(CancellationToken cancellationToken)
     {
-        return await _dbContext.Wallets
+        return await dbContext.Wallets
             .FromSqlRaw(_dialect.WalletsAtOneMomentSql)
             .AsNoTracking()
             .GroupBy(x => new { x.TenantId, x.Currency })
@@ -273,27 +265,27 @@ internal sealed class WalletRepo
     private async Task<bool> TrySave(Func<Task<bool>> isConflict, CancellationToken cancellationToken)
     {
         try {
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
             return true;
         }
         catch (DbUpdateException) {
-            _dbContext.ChangeTracker.Clear();
-            if (!WalletSession.IsTransactionEnded(_dbContext.Database) && await isConflict())
+            dbContext.ChangeTracker.Clear();
+            if (!WalletSession.IsTransactionEnded(dbContext.Database) && await isConflict())
                 return false;
             throw;
         }
         finally {
-            _dbContext.ChangeTracker.Clear();
+            dbContext.ChangeTracker.Clear();
         }
     }
 
     private Task<bool> IsTransferTaken(TransferModel transfer, CancellationToken cancellationToken)
     {
         return transfer.ExternalReferenceKey != null
-            ? _dbContext.Transfers.AnyAsync(
+            ? dbContext.Transfers.AnyAsync(
                 x => x.TenantId == transfer.TenantId && x.ExternalReferenceKey == transfer.ExternalReferenceKey,
                 cancellationToken)
-            : _dbContext.Transfers.AnyAsync(x => x.PendingTransferId == transfer.PendingTransferId,
+            : dbContext.Transfers.AnyAsync(x => x.PendingTransferId == transfer.PendingTransferId,
                 cancellationToken);
     }
 }

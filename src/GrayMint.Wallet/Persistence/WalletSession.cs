@@ -87,15 +87,18 @@ internal sealed class WalletSession : IAsyncDisposable
                database.CurrentTransaction.GetDbTransaction().Connection == null;
     }
 
-    // not cancellable: what a failed call wrote must be taken back
+    // A deadline of its own, not the call's token, which may be canceled already: what a failed call wrote must be
+    // taken back. A minute ends only a rollback the database never answers.
     public async ValueTask DisposeAsync()
     {
         try {
             if (_ownTransaction != null)
                 await _ownTransaction.DisposeAsync();
             else if (_savepointTransaction != null && !_isCommitted &&
-                     _savepointTransaction.GetDbTransaction().Connection != null)
-                await _savepointTransaction.RollbackToSavepointAsync(SavepointName, CancellationToken.None);
+                     _savepointTransaction.GetDbTransaction().Connection != null) {
+                using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+                await _savepointTransaction.RollbackToSavepointAsync(SavepointName, deadline.Token);
+            }
         }
         finally {
             if (_hostDatabase != null)

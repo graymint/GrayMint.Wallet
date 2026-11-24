@@ -15,10 +15,10 @@ public class ReconciliationTest(TestContext testContext)
     public async Task ReconciledBooksReportNothing(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
-        var other = await testWallet.CreateWallet("other", -20, CancellationToken);
-        await testWallet.CreateWallet("unused", 0, CancellationToken);
+        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
+        var other = await testWallet.CreateWallet("other", -20, cancellationToken: CancellationToken);
+        await testWallet.CreateWallet("unused", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken,
             TestWallet.Request(source, wallet, 50),
             TestWallet.Request(wallet, other, 7, isPending: true, externalReferenceKey: "posted"),
@@ -35,7 +35,7 @@ public class ReconciliationTest(TestContext testContext)
         Assert.IsEmpty(report.CurrencyImbalances);
         Assert.IsTrue(report.IsReconciled);
         Assert.AreEqual(4, report.WalletCount);
-        wallet = await testWallet.GetWallet(wallet.WalletId, CancellationToken);
+        wallet = await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken);
         Assert.AreEqual(58m, wallet.PostedBalance);
         Assert.AreEqual(2m, wallet.PendingOut);
     }
@@ -46,8 +46,8 @@ public class ReconciliationTest(TestContext testContext)
     public async Task WalletPutRightMeanwhileIsNotReported(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 10));
         await testWallet.Execute(
             $"UPDATE gmwallet.\"Wallets\" SET \"PostedIn\" = 11 WHERE \"WalletId\" = {wallet.WalletId}",
@@ -64,6 +64,7 @@ public class ReconciliationTest(TestContext testContext)
         await holder.Database.ExecuteSqlRawAsync(
             $"UPDATE gmwallet.\"Wallets\" SET \"PostedIn\" = 10 WHERE \"WalletId\" = {wallet.WalletId}",
             CancellationToken);
+
         await transaction.CommitAsync(CancellationToken);
 
         Assert.IsEmpty((await check).WalletDiscrepancies);
@@ -73,11 +74,12 @@ public class ReconciliationTest(TestContext testContext)
     public async Task TotalChangedBehindTheServiceIsFound(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken,
             TestWallet.Request(source, wallet, 10),
             TestWallet.Request(source, wallet, 4, isPending: true));
+
         await testWallet.Execute(
             $"UPDATE gmwallet.\"Wallets\" SET \"PostedIn\" = 11 WHERE \"WalletId\" = {wallet.WalletId}",
             CancellationToken);
@@ -104,8 +106,8 @@ public class ReconciliationTest(TestContext testContext)
     public async Task WalletDiscrepancyIsFoundOnTheHostsConnection(WalletDatabaseProvider provider)
     {
         await using var host = await TestHost.Create(provider, CancellationToken);
-        var source = await host.Wallet.CreateSource(CancellationToken);
-        var wallet = await host.Wallet.CreateWallet("owner", 0, CancellationToken);
+        var source = await host.Wallet.CreateSource(cancellationToken: CancellationToken);
+        var wallet = await host.Wallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         await host.Wallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 10));
         await host.Wallet.Execute(
             $"UPDATE gmwallet.\"Wallets\" SET \"PostedIn\" = 11 WHERE \"WalletId\" = {wallet.WalletId}",
@@ -114,6 +116,7 @@ public class ReconciliationTest(TestContext testContext)
         await using var scope = host.CreateScope();
         var report = await scope.ServiceProvider.GetRequiredService<WalletReconciliationService>()
             .Reconcile(CancellationToken);
+
         Assert.AreEqual(wallet.WalletId, report.WalletDiscrepancies.Single().Wallet.WalletId);
     }
 
@@ -123,19 +126,22 @@ public class ReconciliationTest(TestContext testContext)
     public async Task TransferChangedOrDeletedBehindTheServiceIsFound(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(CancellationToken);
-        var changed = await testWallet.CreateWallet("changed", 0, CancellationToken);
-        var deleted = await testWallet.CreateWallet("deleted", 0, CancellationToken);
+        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
+        var changed = await testWallet.CreateWallet("changed", 0, cancellationToken: CancellationToken);
+        var deleted = await testWallet.CreateWallet("deleted", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken,
             TestWallet.Request(source, changed, 10),
             TestWallet.Request(source, deleted, 5));
+
         await testWallet.Execute(
             $"UPDATE gmwallet.\"Transfers\" SET \"Amount\" = 1 WHERE \"ToWalletId\" = {changed.WalletId}",
             CancellationToken);
+
         await testWallet.Execute(
             $"DELETE FROM gmwallet.\"WalletTransactions\" WHERE \"TransferId\" IN (SELECT \"TransferId\" " +
             $"FROM gmwallet.\"Transfers\" WHERE \"ToWalletId\" = {deleted.WalletId})",
             CancellationToken);
+
         await testWallet.Execute(
             $"DELETE FROM gmwallet.\"Transfers\" WHERE \"ToWalletId\" = {deleted.WalletId}",
             CancellationToken);
@@ -143,8 +149,9 @@ public class ReconciliationTest(TestContext testContext)
         await using var scope = testWallet.CreateScope();
         var report = await scope.Reconciliation.Reconcile(CancellationToken);
         var found = report.WalletDiscrepancies.ToDictionary(x => x.Wallet.WalletId);
-        CollectionAssert.AreEquivalent(new[] { source.WalletId, changed.WalletId, deleted.WalletId },
-            found.Keys.ToArray());
+        Assert.AreSequenceEqual([source.WalletId, changed.WalletId, deleted.WalletId],
+            found.Keys.ToArray(), SequenceOrder.InAnyOrder);
+
         Assert.AreEqual(1m, found[changed.WalletId].FromTransfers.PostedIn);
         Assert.AreEqual(0m, found[deleted.WalletId].FromTransfers.PostedIn);
         // the stored totals, which nothing changed, still add up to zero
@@ -157,18 +164,20 @@ public class ReconciliationTest(TestContext testContext)
     public async Task WalletTransactionChangedOrDeletedBehindTheServiceIsFound(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(CancellationToken);
-        var changed = await testWallet.CreateWallet("changed", 0, CancellationToken);
-        var deleted = await testWallet.CreateWallet("deleted", 0, CancellationToken);
+        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
+        var changed = await testWallet.CreateWallet("changed", 0, cancellationToken: CancellationToken);
+        var deleted = await testWallet.CreateWallet("deleted", 0, cancellationToken: CancellationToken);
         await testWallet.Transfer(CancellationToken,
             TestWallet.Request(source, changed, 10),
             TestWallet.Request(source, changed, 3),
             TestWallet.Request(source, deleted, 5));
+
         await testWallet.Execute(
             $"UPDATE gmwallet.\"WalletTransactions\" SET \"PostedBalance\" = 1 " +
             $"WHERE \"WalletId\" = {changed.WalletId} AND \"TransferId\" = (SELECT MAX(\"TransferId\") " +
             $"FROM gmwallet.\"WalletTransactions\" WHERE \"WalletId\" = {changed.WalletId})",
             CancellationToken);
+
         await testWallet.Execute(
             $"DELETE FROM gmwallet.\"WalletTransactions\" WHERE \"WalletId\" = {deleted.WalletId}",
             CancellationToken);
@@ -176,7 +185,9 @@ public class ReconciliationTest(TestContext testContext)
         await using var scope = testWallet.CreateScope();
         var report = await scope.Reconciliation.Reconcile(CancellationToken);
         var found = report.WalletDiscrepancies.ToDictionary(x => x.Wallet.WalletId);
-        CollectionAssert.AreEquivalent(new[] { changed.WalletId, deleted.WalletId }, found.Keys.ToArray());
+        Assert.AreSequenceEqual([changed.WalletId, deleted.WalletId], found.Keys.ToArray(),
+            SequenceOrder.InAnyOrder);
+
         Assert.AreEqual(13m, found[changed.WalletId].FromTransfers.PostedIn);
         Assert.AreEqual(13m, found[changed.WalletId].Wallet.PostedBalance);
         Assert.AreEqual(3m, found[changed.WalletId].LastTransaction?.Amount);
@@ -194,8 +205,8 @@ public class ReconciliationTest(TestContext testContext)
     public async Task CurrenciesAreAddedUpAtOneMoment(WalletDatabaseProvider provider)
     {
         await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var first = await testWallet.CreateSource(CancellationToken);
-        var second = await testWallet.CreateWallet("owner", 0, CancellationToken);
+        var first = await testWallet.CreateSource(cancellationToken: CancellationToken);
+        var second = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
         if (provider == WalletDatabaseProvider.SqlServer)
             await testWallet.ReadCommittedRowsByLocks(CancellationToken);
 
@@ -213,6 +224,7 @@ public class ReconciliationTest(TestContext testContext)
         await holder.Database.ExecuteSqlRawAsync(
             $"UPDATE gmwallet.\"Wallets\" SET \"PostedOut\" = 5 WHERE \"WalletId\" = {first.WalletId}",
             CancellationToken);
+
         await transaction.CommitAsync(CancellationToken);
 
         Assert.IsEmpty((await check).CurrencyImbalances);
