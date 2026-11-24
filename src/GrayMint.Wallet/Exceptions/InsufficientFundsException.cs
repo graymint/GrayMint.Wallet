@@ -3,7 +3,7 @@ namespace GrayMint.Wallet.Exceptions;
 /// <summary>
 /// A transfer out of a wallet would take it below the lowest its available balance may go. The call changed nothing.
 /// </summary>
-public class InsufficientFundsException : Exception
+public sealed class InsufficientFundsException : Exception
 {
     /// <summary>The wallet that has too little to spend.</summary>
     public string WalletId { get; }
