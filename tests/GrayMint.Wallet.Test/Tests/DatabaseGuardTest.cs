@@ -9,26 +9,23 @@ namespace GrayMint.Wallet.Test.Tests;
 
 // What the database itself holds, whatever the code does: tried behind the service's back, as the tables' owner.
 [TestClass]
-public class DatabaseGuardTest(TestContext testContext)
+public class DatabaseGuardTest : TestBase
 {
     private const string SchemaVersionSql =
         "SELECT \"SchemaVersion\" FROM gmwallet.\"Metadata\"";
 
-    private CancellationToken CancellationToken => testContext.CancellationToken;
-
     [TestMethod, EveryDatabase]
     public async Task DatabaseHoldsAWalletToItsLimit(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", -5, cancellationToken: CancellationToken);
+        await using var testWallet = await CreateTestWallet(provider);
+        var wallet = await testWallet.CreateWallet("owner", -5);
 
         // money pending out counts, and money pending in is not there to spend
         foreach (var totals in new[] {
                      "\"PostedOut\" = 5.01", "\"PendingOut\" = 6", "\"PostedOut\" = 5.01, \"PendingIn\" = 100"
                  }) {
             var exception = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-                $"UPDATE gmwallet.\"Wallets\" SET {totals} WHERE \"WalletId\" = {wallet.WalletId}",
-                CancellationToken), totals);
+                $"UPDATE gmwallet.\"Wallets\" SET {totals} WHERE \"WalletId\" = {wallet.WalletId}"), totals);
 
             Assert.Contains(WalletDbContext.WalletMinAvailableBalanceCheck, exception.Message, totals);
         }
@@ -37,33 +34,32 @@ public class DatabaseGuardTest(TestContext testContext)
         foreach (var total in new[] { "PendingOut", "PostedOut", "PendingIn", "PostedIn" }) {
             var exception = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
                 $"UPDATE gmwallet.\"Wallets\" SET \"{total}\" = -1, \"MinAvailableBalance\" = NULL " +
-                $"WHERE \"WalletId\" = {wallet.WalletId}", CancellationToken), total);
+                $"WHERE \"WalletId\" = {wallet.WalletId}"), total);
 
             Assert.Contains(WalletDbContext.WalletTotalsCheck, exception.Message, total);
         }
 
         await testWallet.Execute(
-            $"UPDATE gmwallet.\"Wallets\" SET \"PostedOut\" = 5 WHERE \"WalletId\" = {wallet.WalletId}",
-            CancellationToken);
+            $"UPDATE gmwallet.\"Wallets\" SET \"PostedOut\" = 5 WHERE \"WalletId\" = {wallet.WalletId}");
     }
 
     [TestMethod, EveryDatabase]
     public async Task DatabaseKeepsATransferInItsTenantAndCurrency(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
-        var otherTenant = await testWallet.CreateWallet("owner", null, tenantId: "2", cancellationToken: CancellationToken);
-        var otherCurrency = await testWallet.CreateWallet("owner", null, currency: "EUR", cancellationToken: CancellationToken);
-        var other = await testWallet.CreateWallet("other", null, cancellationToken: CancellationToken);
+        await using var testWallet = await CreateTestWallet(provider);
+        var source = await testWallet.CreateSource();
+        var otherTenant = await testWallet.CreateWallet("owner", null, tenantId: "2");
+        var otherCurrency = await testWallet.CreateWallet("owner", null, currency: "EUR");
+        var other = await testWallet.CreateWallet("other", null);
 
         // on either side
         foreach (var walletId in new[] { otherTenant.WalletId, otherCurrency.WalletId }) {
             var toOther = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-                InsertTransfer(source.WalletId, walletId, 1), CancellationToken));
+                InsertTransfer(source.WalletId, walletId, 1)));
 
             Assert.Contains("FK_Transfers_Wallets_TenantId_Currency_ToWalletId", toOther.Message);
             var fromOther = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-                InsertTransfer(walletId, other.WalletId, 1), CancellationToken));
+                InsertTransfer(walletId, other.WalletId, 1)));
 
             Assert.Contains("FK_Transfers_Wallets_TenantId_Currency_FromWalletId", fromOther.Message);
         }
@@ -71,8 +67,7 @@ public class DatabaseGuardTest(TestContext testContext)
         // a settlement without its pending transfer
         var noPending = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
             "INSERT INTO gmwallet.\"Transfers\" (\"TenantId\", \"Currency\", \"Type\", \"ExternalReferenceKey\", \"FromWalletId\", " +
-            $"\"ToWalletId\", \"Amount\") VALUES (1, 'USD', 'PostPending', NULL, {source.WalletId}, {other.WalletId}, 1)",
-            CancellationToken));
+            $"\"ToWalletId\", \"Amount\") VALUES (1, 'USD', 'PostPending', NULL, {source.WalletId}, {other.WalletId}, 1)"));
 
         Assert.Contains(WalletDbContext.TransferTypeCheck, noPending.Message);
     }
@@ -82,40 +77,39 @@ public class DatabaseGuardTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task DatabaseKeepsAWalletTransactionInItsTenant(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", null, cancellationToken: CancellationToken);
-        var otherTenant = await testWallet.CreateWallet("owner", null, tenantId: "2", cancellationToken: CancellationToken);
-        var transfer = (await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 1)))[0];
+        await using var testWallet = await CreateTestWallet(provider);
+        var source = await testWallet.CreateSource();
+        var wallet = await testWallet.CreateWallet("owner", null);
+        var otherTenant = await testWallet.CreateWallet("owner", null, tenantId: "2");
+        var transfer = (await testWallet.Transfer(TestWallet.Request(source, wallet, 1)))[0];
 
         var walletOfAnother = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-            InsertWalletTransaction("1", otherTenant.WalletId, transfer.TransferId), CancellationToken));
+            InsertWalletTransaction("1", otherTenant.WalletId, transfer.TransferId)));
 
         Assert.Contains("FK_WalletTransactions_Wallets_TenantId_WalletId", walletOfAnother.Message);
         var transferOfAnother = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-            InsertWalletTransaction("2", otherTenant.WalletId, transfer.TransferId), CancellationToken));
+            InsertWalletTransaction("2", otherTenant.WalletId, transfer.TransferId)));
 
         Assert.Contains("FK_WalletTransactions_Transfers_TenantId_TransferId", transferOfAnother.Message);
-        Assert.AreEqual(2L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"WalletTransactions\"",
-            CancellationToken));
+        Assert.AreEqual(2L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"WalletTransactions\""));
     }
 
     [TestMethod, EveryDatabase]
     public async Task DatabaseHoldsATransferToAnAmountAndTwoWallets(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", null, cancellationToken: CancellationToken);
+        await using var testWallet = await CreateTestWallet(provider);
+        var source = await testWallet.CreateSource();
+        var wallet = await testWallet.CreateWallet("owner", null);
 
         foreach (var amount in new[] { 0, -1 }) {
             var exception = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-                InsertTransfer(source.WalletId, wallet.WalletId, amount), CancellationToken));
+                InsertTransfer(source.WalletId, wallet.WalletId, amount)));
 
             Assert.Contains(WalletDbContext.TransferAmountCheck, exception.Message);
         }
 
         var oneWallet = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-            InsertTransfer(wallet.WalletId, wallet.WalletId, 1), CancellationToken));
+            InsertTransfer(wallet.WalletId, wallet.WalletId, 1)));
 
         Assert.Contains(WalletDbContext.TransferWalletsCheck, oneWallet.Message);
     }
@@ -124,26 +118,24 @@ public class DatabaseGuardTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task DatabaseHoldsOneSettlementOfATransferOfItsTenant(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", null, cancellationToken: CancellationToken);
-        var source2 = await testWallet.CreateSource(tenantId: "2", cancellationToken: CancellationToken);
-        var wallet2 = await testWallet.CreateWallet("owner", null, tenantId: "2", cancellationToken: CancellationToken);
-        var held = await testWallet.Transfer(CancellationToken,
-            TestWallet.Request(source, wallet, 1, isPending: true, externalReferenceKey: "settled"),
+        await using var testWallet = await CreateTestWallet(provider);
+        var source = await testWallet.CreateSource();
+        var wallet = await testWallet.CreateWallet("owner", null);
+        var source2 = await testWallet.CreateSource(tenantId: "2");
+        var wallet2 = await testWallet.CreateWallet("owner", null, tenantId: "2");
+        var held = await testWallet.Transfer(TestWallet.Request(source, wallet, 1, isPending: true, externalReferenceKey: "settled"),
             TestWallet.Request(source, wallet, 1, isPending: true, externalReferenceKey: "open"));
 
         await using var scope = testWallet.CreateScope();
-        await scope.Transfers.PostPending(TestWallet.TenantId, ["settled"], CancellationToken);
+        await scope.Transfers.PostPending(TestWallet.TenantId, ["settled"], TestCt);
 
         var twice = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-            InsertSettlement(TestWallet.TenantId, source.WalletId, wallet.WalletId, held[0].TransferId),
-            CancellationToken));
+            InsertSettlement(TestWallet.TenantId, source.WalletId, wallet.WalletId, held[0].TransferId)));
 
         Assert.Contains("IX_Transfers_PendingTransferId", twice.Message);
 
         var otherTenant = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-            InsertSettlement("2", source2.WalletId, wallet2.WalletId, held[1].TransferId), CancellationToken));
+            InsertSettlement("2", source2.WalletId, wallet2.WalletId, held[1].TransferId)));
 
         Assert.Contains("FK_Transfers_Transfers_TenantId_PendingTransferId", otherTenant.Message);
     }
@@ -153,13 +145,13 @@ public class DatabaseGuardTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task TenantTablesAreEveryTableWithATenant(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        await using var testWallet = await CreateTestWallet(provider);
         const string withTenant = "SELECT count(*) FROM INFORMATION_SCHEMA.COLUMNS " +
                                   "WHERE TABLE_SCHEMA = 'gmwallet' AND COLUMN_NAME = 'TenantId'";
 
-        Assert.AreEqual(WalletSchema.TenantTables.Count, await testWallet.Count(withTenant, CancellationToken));
+        Assert.AreEqual(WalletSchema.TenantTables.Count, await testWallet.Count(withTenant));
         foreach (var table in WalletSchema.TenantTables)
-            Assert.AreEqual(1L, await testWallet.Count($"{withTenant} AND TABLE_NAME = '{table}'", CancellationToken),
+            Assert.AreEqual(1L, await testWallet.Count($"{withTenant} AND TABLE_NAME = '{table}'"),
                 table);
     }
 
@@ -169,16 +161,15 @@ public class DatabaseGuardTest(TestContext testContext)
     public async Task SetupRefusesADatabaseWithSomeOfTheTables(WalletDatabaseProvider provider)
     {
         foreach (var table in new[] { WalletSchema.WalletTransactionsTable, WalletSchema.MetadataTable }) {
-            await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-            await testWallet.Execute($"DROP TABLE gmwallet.\"{table}\"", CancellationToken);
+            await using var testWallet = await CreateTestWallet(provider);
+            await testWallet.Execute($"DROP TABLE gmwallet.\"{table}\"");
 
             var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-                testWallet.Setup(CancellationToken), table);
+                testWallet.Setup(), table);
 
             Assert.Contains("Only some of the wallet's tables", exception.Message, table);
             Assert.AreEqual(0L, await testWallet.Count(
-                $"SELECT count(*) FROM information_schema.tables WHERE table_schema = 'gmwallet' AND table_name = '{table}'",
-                CancellationToken), table);
+                $"SELECT count(*) FROM information_schema.tables WHERE table_schema = 'gmwallet' AND table_name = '{table}'"), table);
         }
     }
 
@@ -187,21 +178,21 @@ public class DatabaseGuardTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task WalletRefusesADatabaseThatDoesNotKeepUtf8(WalletDatabaseProvider provider)
     {
-        await using var testWallet = TestWallet.CreateEmpty(provider);
-        await testWallet.CreateDatabaseWithoutUtf8(CancellationToken);
+        await using var testWallet = CreateEmptyTestWallet(provider);
+        await testWallet.CreateDatabaseWithoutUtf8();
         var refusal = provider == WalletDatabaseProvider.PostgreSql
             ? "keeps text in the encoding LATIN1, not in UTF-8"
             : "keeps text in the collation SQL_Latin1_General_CP1_CI_AS, not in UTF-8";
 
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            testWallet.Setup(CancellationToken));
+            testWallet.Setup());
 
         Assert.Contains(refusal, exception.Message);
         Assert.AreEqual(0L, await testWallet.Count(
-            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'gmwallet'", CancellationToken));
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'gmwallet'"));
 
         using var host = BuildHost(testWallet);
-        exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => host.StartAsync(CancellationToken));
+        exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => host.StartAsync());
         Assert.Contains(refusal, exception.Message);
     }
 
@@ -211,7 +202,7 @@ public class DatabaseGuardTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task DefaultsAreNamedByTheirTableAndColumn(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        await using var testWallet = await CreateTestWallet(provider);
         (string Table, string Column)[] defaults = [
             ("Transfers", "CreatedTime"), ("Wallets", "CreatedTime"), ("Wallets", "PendingIn"),
             ("Wallets", "PendingOut"), ("Wallets", "PostedIn"), ("Wallets", "PostedOut")
@@ -222,61 +213,60 @@ public class DatabaseGuardTest(TestContext testContext)
                 "SELECT (SELECT COUNT(*) FROM sys.default_constraints WHERE is_system_named = 1) + " +
                 "(SELECT COUNT(*) FROM sys.check_constraints WHERE is_system_named = 1) + " +
                 "(SELECT COUNT(*) FROM sys.key_constraints WHERE is_system_named = 1) + " +
-                "(SELECT COUNT(*) FROM sys.foreign_keys WHERE is_system_named = 1)", CancellationToken));
+                "(SELECT COUNT(*) FROM sys.foreign_keys WHERE is_system_named = 1)"));
 
             Assert.AreEqual(defaults.Length, await testWallet.Count(
-                "SELECT COUNT(*) FROM sys.default_constraints", CancellationToken));
+                "SELECT COUNT(*) FROM sys.default_constraints"));
 
             foreach (var (table, column) in defaults)
                 Assert.AreEqual(1L, await testWallet.Count(
                     "SELECT COUNT(*) FROM sys.default_constraints AS d JOIN sys.columns AS c " +
                     "ON c.object_id = d.parent_object_id AND c.column_id = d.parent_column_id " +
                     $"WHERE d.name = 'DF_{table}_{column}' AND c.name = '{column}' " +
-                    $"AND OBJECT_NAME(d.parent_object_id) = '{table}'", CancellationToken), $"{table}.{column}");
+                    $"AND OBJECT_NAME(d.parent_object_id) = '{table}'"), $"{table}.{column}");
 
             return;
         }
 
         Assert.AreEqual(defaults.Length, await testWallet.Count(
             "SELECT count(*) FROM information_schema.columns " +
-            "WHERE table_schema = 'gmwallet' AND column_default IS NOT NULL", CancellationToken));
+            "WHERE table_schema = 'gmwallet' AND column_default IS NOT NULL"));
 
         foreach (var (table, column) in defaults)
             Assert.AreEqual(1L, await testWallet.Count(
                 "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'gmwallet' " +
-                $"AND table_name = '{table}' AND column_name = '{column}' AND column_default IS NOT NULL",
-                CancellationToken), $"{table}.{column}");
+                $"AND table_name = '{table}' AND column_name = '{column}' AND column_default IS NOT NULL"), $"{table}.{column}");
     }
 
     // one row, so the start reads one version, whatever writes to the table
     [TestMethod, EveryDatabase]
     public async Task MetadataKeepsOneRow(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        await using var testWallet = await CreateTestWallet(provider);
 
         var exception = await Assert.ThrowsAsync<DbException>(() => testWallet.Execute(
-            "INSERT INTO gmwallet.\"Metadata\" (\"MetadataId\", \"SchemaVersion\") VALUES (2, 1)", CancellationToken));
+            "INSERT INTO gmwallet.\"Metadata\" (\"MetadataId\", \"SchemaVersion\") VALUES (2, 1)"));
 
         Assert.Contains(WalletDbContext.MetadataOneRowCheck, exception.Message);
-        Assert.AreEqual(1L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"Metadata\"", CancellationToken));
+        Assert.AreEqual(1L, await testWallet.Count("SELECT count(*) FROM gmwallet.\"Metadata\""));
     }
 
     // a host that never ran the setup stops at its start, not at its first call
     [TestMethod, EveryDatabase]
     public async Task HostDoesNotStartOnADatabaseWithoutTheTables(WalletDatabaseProvider provider)
     {
-        await using var withoutTable = await TestWallet.Create(provider, CancellationToken);
-        await withoutTable.Execute("DROP TABLE gmwallet.\"WalletTransactions\"", CancellationToken);
+        await using var withoutTable = await CreateTestWallet(provider);
+        await withoutTable.Execute("DROP TABLE gmwallet.\"WalletTransactions\"");
         using var refused = BuildHost(withoutTable);
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            refused.StartAsync(CancellationToken));
+            refused.StartAsync());
 
         Assert.Contains("UseGrayMintWallet", exception.Message);
 
-        await using var complete = await TestWallet.Create(provider, CancellationToken);
+        await using var complete = await CreateTestWallet(provider);
         using var started = BuildHost(complete);
-        await started.StartAsync(CancellationToken);
-        await started.StopAsync(CancellationToken);
+        await started.StartAsync();
+        await started.StopAsync();
     }
 
     // A build of the wallet on tables of another version would read them wrong: neither its start nor its setup takes
@@ -284,22 +274,22 @@ public class DatabaseGuardTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task HostDoesNotStartOnTablesOfAnotherVersion(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        Assert.AreEqual(1L, await testWallet.Count(SchemaVersionSql, CancellationToken));
+        await using var testWallet = await CreateTestWallet(provider);
+        Assert.AreEqual(1L, await testWallet.Count(SchemaVersionSql));
 
-        await testWallet.Execute("UPDATE gmwallet.\"Metadata\" SET \"SchemaVersion\" = 2", CancellationToken);
+        await testWallet.Execute("UPDATE gmwallet.\"Metadata\" SET \"SchemaVersion\" = 2");
         using var newer = BuildHost(testWallet);
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            newer.StartAsync(CancellationToken));
+            newer.StartAsync());
 
         Assert.Contains("of version 2", exception.Message);
-        exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => testWallet.Setup(CancellationToken));
+        exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => testWallet.Setup());
         Assert.Contains("of version 2", exception.Message);
-        Assert.AreEqual(2L, await testWallet.Count(SchemaVersionSql, CancellationToken));
+        Assert.AreEqual(2L, await testWallet.Count(SchemaVersionSql));
 
-        await testWallet.Execute("DELETE FROM gmwallet.\"Metadata\"", CancellationToken);
+        await testWallet.Execute("DELETE FROM gmwallet.\"Metadata\"");
         using var none = BuildHost(testWallet);
-        exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => none.StartAsync(CancellationToken));
+        exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => none.StartAsync());
         Assert.Contains("of version none", exception.Message);
     }
 
@@ -308,7 +298,7 @@ public class DatabaseGuardTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task WalletRefusesAContextThatRetriesOnFailure(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
+        await using var testWallet = await CreateTestWallet(provider);
         var services = new ServiceCollection();
         services.AddGrayMintWallet();
         // the provider that calls it is disposed before testWallet
@@ -316,7 +306,7 @@ public class DatabaseGuardTest(TestContext testContext)
         services.AddGrayMintWalletDb(x => testWallet.UseDatabaseRetrying(x));
         await using var serviceProvider = services.BuildServiceProvider();
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            serviceProvider.UseGrayMintWallet(CancellationToken));
+            serviceProvider.UseGrayMintWallet(TestCt));
 
         Assert.Contains("EnableRetryOnFailure", exception.Message);
 
@@ -326,7 +316,7 @@ public class DatabaseGuardTest(TestContext testContext)
         // ReSharper disable once AccessToDisposedClosure
         builder.Services.AddGrayMintWalletDb(x => testWallet.UseDatabaseRetrying(x));
         using var host = builder.Build();
-        exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => host.StartAsync(CancellationToken));
+        exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => host.StartAsync());
         Assert.Contains("EnableRetryOnFailure", exception.Message);
     }
 

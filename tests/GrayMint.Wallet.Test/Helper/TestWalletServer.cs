@@ -23,9 +23,9 @@ public sealed class TestWalletServer : IAsyncDisposable
     }
 
     public static async Task<TestWalletServer> Create(WalletDatabaseProvider provider,
-        IReadOnlyList<string>? apiKeys = null)
+        IReadOnlyList<string>? apiKeys = null, CancellationToken cancellationToken = default)
     {
-        var database = TestWallet.CreateEmpty(provider);
+        var database = TestWallet.CreateEmpty(provider, cancellationToken);
         var keys = apiKeys ?? [CreateApiKey(), CreateApiKey()];
         var settings = new Dictionary<string, string?> {
             ["ConnectionStrings:WalletDatabase"] = database.ConnectionString,

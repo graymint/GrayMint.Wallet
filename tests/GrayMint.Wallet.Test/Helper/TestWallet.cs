@@ -27,26 +27,30 @@ public sealed class TestWallet : IAsyncDisposable
     private readonly ServiceProvider _serviceProvider;
 
     public WalletDatabaseProvider Provider { get; }
+
+    // the test's token, which every call of this database's takes
+    public CancellationToken CancellationToken { get; }
     public string DatabaseName { get; } = $"test_{Guid.CreateVersion7():N}";
 
     public string ConnectionString => Provider == WalletDatabaseProvider.PostgreSql
         ? $"{PostgreSqlServer};Database={DatabaseName}"
         : $"{SqlServerServer};Database={DatabaseName}";
 
-    private TestWallet(WalletDatabaseProvider provider)
+    private TestWallet(WalletDatabaseProvider provider, CancellationToken cancellationToken)
     {
         Provider = provider;
+        CancellationToken = cancellationToken;
         var services = new ServiceCollection();
         services.AddGrayMintWallet();
         services.AddGrayMintWalletDb(options => UseDatabase(options));
         _serviceProvider = services.BuildServiceProvider();
     }
 
-    public static async Task<TestWallet> Create(WalletDatabaseProvider provider, CancellationToken cancellationToken)
+    public static async Task<TestWallet> Create(WalletDatabaseProvider provider, CancellationToken cancellationToken = default)
     {
-        var testWallet = new TestWallet(provider);
+        var testWallet = new TestWallet(provider, cancellationToken);
         try {
-            await testWallet.Setup(cancellationToken);
+            await testWallet.Setup();
             return testWallet;
         }
         catch {
@@ -57,15 +61,15 @@ public sealed class TestWallet : IAsyncDisposable
     }
 
     // only a name: a setup of the test's choice makes the database
-    public static TestWallet CreateEmpty(WalletDatabaseProvider provider)
+    public static TestWallet CreateEmpty(WalletDatabaseProvider provider, CancellationToken cancellationToken = default)
     {
-        return new TestWallet(provider);
+        return new TestWallet(provider, cancellationToken);
     }
 
     // the wallet's setup, as a host runs it
-    public async Task Setup(CancellationToken cancellationToken)
+    public async Task Setup()
     {
-        await _serviceProvider.UseGrayMintWallet(cancellationToken);
+        await _serviceProvider.UseGrayMintWallet(CancellationToken);
     }
 
     // the wallet's services for one scope, as a request of a host gets them
@@ -107,14 +111,13 @@ public sealed class TestWallet : IAsyncDisposable
     }
 
     // a wallet with no limit, which money comes from, as a host's cash wallet
-    public async Task<WalletInfo> CreateSource(string tenantId = TenantId, string currency = Currency,
-        CancellationToken cancellationToken = default)
+    public async Task<WalletInfo> CreateSource(string tenantId = TenantId, string currency = Currency)
     {
-        return await CreateWallet("source", null, tenantId, currency, cancellationToken);
+        return await CreateWallet("source", null, tenantId, currency);
     }
 
     public async Task<WalletInfo> CreateWallet(string ownerReferenceKey, decimal? minAvailableBalance,
-        string tenantId = TenantId, string currency = Currency, CancellationToken cancellationToken = default)
+        string tenantId = TenantId, string currency = Currency)
     {
         await using var scope = CreateScope();
         return await scope.Wallets.Create(tenantId, new WalletCreateRequest {
@@ -122,32 +125,29 @@ public sealed class TestWallet : IAsyncDisposable
             WalletCode = "credit",
             Currency = currency,
             MinAvailableBalance = minAvailableBalance
-        }, cancellationToken);
+        }, CancellationToken);
     }
 
-    public async Task<WalletInfo> GetWallet(string walletId, string tenantId = TenantId,
-        CancellationToken cancellationToken = default)
+    public async Task<WalletInfo> GetWallet(string walletId, string tenantId = TenantId)
     {
         await using var scope = CreateScope();
-        return await scope.Wallets.Get(tenantId, walletId, cancellationToken);
+        return await scope.Wallets.Get(tenantId, walletId, CancellationToken);
     }
 
     // a wallet's transactions, oldest first, as its statement reads
-    public async Task<IReadOnlyList<WalletTransaction>> GetTransactions(WalletInfo wallet,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<WalletTransaction>> GetTransactions(WalletInfo wallet)
     {
         await using var scope = CreateScope();
         var transactions = await scope.Wallets.GetTransactions(wallet.TenantId, wallet.WalletId, null,
-            WalletLimits.MaxPageSize, cancellationToken);
+            WalletLimits.MaxPageSize, CancellationToken);
 
         return transactions.Reverse().ToArray();
     }
 
-    public async Task<IReadOnlyList<WalletTransfer>> Transfer(CancellationToken cancellationToken,
-        params IReadOnlyList<WalletTransferCreateRequest> requests)
+    public async Task<IReadOnlyList<WalletTransfer>> Transfer(params IReadOnlyList<WalletTransferCreateRequest> requests)
     {
         await using var scope = CreateScope();
-        return await scope.Transfers.Create(TenantId, requests, cancellationToken);
+        return await scope.Transfers.Create(TenantId, requests, CancellationToken);
     }
 
     public static WalletTransferCreateRequest Request(WalletInfo fromWallet, WalletInfo toWallet, decimal amount,
@@ -169,7 +169,7 @@ public sealed class TestWallet : IAsyncDisposable
 
     // Locks a wallet's row as a call that writes it does, until the context's transaction ends.
     internal static async Task LockWallet(WalletDbContext dbContext, WalletInfo wallet,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         await dbContext.Wallets
             .FromSqlRaw(WalletDialect.For(dbContext.Database).LockWalletSql,
@@ -181,16 +181,21 @@ public sealed class TestWallet : IAsyncDisposable
 
     // What a test does behind the wallet's back, as the owner of the tables. Names are quoted "so", which both
     // databases read.
-    public async Task<int> Execute(string sql, CancellationToken cancellationToken)
+    public async Task<int> Execute(string sql)
     {
         await using var dbContext = CreateDbContext();
-        await dbContext.Database.OpenConnectionAsync(cancellationToken);
+        await dbContext.Database.OpenConnectionAsync(CancellationToken);
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
         command.CommandText = sql;
-        return await command.ExecuteNonQueryAsync(cancellationToken);
+        return await command.ExecuteNonQueryAsync(CancellationToken);
     }
 
-    public async Task<long> Count(string sql, CancellationToken cancellationToken)
+    public Task<long> Count(string sql)
+    {
+        return Count(sql, CancellationToken);
+    }
+
+    private async Task<long> Count(string sql, CancellationToken cancellationToken)
     {
         await using var dbContext = CreateDbContext();
         await dbContext.Database.OpenConnectionAsync(cancellationToken);
@@ -200,13 +205,13 @@ public sealed class TestWallet : IAsyncDisposable
     }
 
     // Waits until as many calls as given wait for a lock another holds, so a test knows they got that far.
-    public async Task WaitForBlockedCalls(int count, CancellationToken cancellationToken)
+    public async Task WaitForBlockedCalls(int count)
     {
         var sql = Provider == WalletDatabaseProvider.PostgreSql
             ? "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"
             : "SELECT COUNT(*) FROM sys.dm_exec_requests WHERE database_id = DB_ID() AND blocking_session_id <> 0";
 
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         while (await Count(sql, timeout.Token) < count)
             await Task.Delay(TimeSpan.FromMilliseconds(20), timeout.Token);
@@ -214,19 +219,19 @@ public sealed class TestWallet : IAsyncDisposable
 
     // SQL Server only. The setup's database reads committed rows by their versions, as EF makes one; from here it
     // reads them by locks, as a database SQL Server makes on its own does. No other connection may be open meanwhile.
-    public async Task ReadCommittedRowsByLocks(CancellationToken cancellationToken)
+    public async Task ReadCommittedRowsByLocks()
     {
         SqlConnection.ClearPool(new SqlConnection(ConnectionString));
-        await Execute("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT OFF", cancellationToken);
+        await Execute("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT OFF");
     }
 
     // The test's database, keeping text in a single-byte code page, as an old database might: LATIN1 on PostgreSQL,
     // SQL_Latin1_General_CP1_CI_AS on SQL Server.
-    public Task CreateDatabaseWithoutUtf8(CancellationToken cancellationToken)
+    public Task CreateDatabaseWithoutUtf8()
     {
         return ExecuteOnServer(Provider == WalletDatabaseProvider.PostgreSql
             ? $"CREATE DATABASE \"{DatabaseName}\" ENCODING 'LATIN1' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0"
-            : $"CREATE DATABASE [{DatabaseName}] COLLATE SQL_Latin1_General_CP1_CI_AS", cancellationToken);
+            : $"CREATE DATABASE [{DatabaseName}] COLLATE SQL_Latin1_General_CP1_CI_AS", CancellationToken);
     }
 
     // A deadline of its own, not the test's token: a cancelled test must still drop its database. A minute ends only

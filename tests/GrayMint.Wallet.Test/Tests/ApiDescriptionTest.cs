@@ -8,16 +8,14 @@ namespace GrayMint.Wallet.Test.Tests;
 // The API's description, the one /scalar shows, says something about every operation, parameter, section and field:
 // what a caller reads there comes from the doc comments, and an undescribed name is a guess.
 [TestClass]
-public class ApiDescriptionTest(TestContext testContext)
+public class ApiDescriptionTest : TestBase
 {
-    private CancellationToken CancellationToken => testContext.CancellationToken;
-
     [TestMethod]
     public async Task EveryNameIsDescribed()
     {
-        await using var server = await TestWalletServer.Create(WalletDatabaseProvider.PostgreSql);
+        await using var server = await CreateTestWalletServer(WalletDatabaseProvider.PostgreSql);
         using var client = server.CreateClient();
-        var json = await client.GetStringAsync("/openapi/v1.json", CancellationToken);
+        var json = await client.GetStringAsync("/openapi/v1.json");
         var document = JsonNode.Parse(json)?.AsObject() ?? throw new InvalidOperationException("No description.");
         var schemas = document["components"]?["schemas"]?.AsObject() ?? [];
         var missing = new List<string>();
@@ -73,15 +71,15 @@ public class ApiDescriptionTest(TestContext testContext)
     [TestMethod]
     public async Task RootLeadsToTheReference()
     {
-        await using var server = await TestWalletServer.Create(WalletDatabaseProvider.PostgreSql);
+        await using var server = await CreateTestWalletServer(WalletDatabaseProvider.PostgreSql);
         using var withoutRedirects = server.CreateClientWithoutRedirects();
-        using var root = await withoutRedirects.GetAsync("/", CancellationToken);
+        using var root = await withoutRedirects.GetAsync("/");
         Assert.AreEqual(HttpStatusCode.Redirect, root.StatusCode);
         Assert.AreEqual("/scalar", root.Headers.Location?.OriginalString);
 
         // Scalar's own address leads on to its page
         using var client = server.CreateClient();
-        using var reference = await client.GetAsync("/scalar", CancellationToken);
+        using var reference = await client.GetAsync("/scalar");
         Assert.AreEqual(HttpStatusCode.OK, reference.StatusCode);
         Assert.AreEqual("text/html", reference.Content.Headers.ContentType?.MediaType);
     }

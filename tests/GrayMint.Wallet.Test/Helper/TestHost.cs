@@ -27,9 +27,9 @@ public sealed class TestHost : IAsyncDisposable
         _serviceProvider = services.BuildServiceProvider();
     }
 
-    public static async Task<TestHost> Create(WalletDatabaseProvider provider, CancellationToken cancellationToken)
+    public static async Task<TestHost> Create(WalletDatabaseProvider provider, CancellationToken cancellationToken = default)
     {
-        var host = new TestHost(TestWallet.CreateEmpty(provider));
+        var host = new TestHost(TestWallet.CreateEmpty(provider, cancellationToken));
         try {
             await using var scope = host.CreateScope();
             await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.EnsureCreatedAsync(cancellationToken);

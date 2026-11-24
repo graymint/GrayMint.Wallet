@@ -9,18 +9,16 @@ namespace GrayMint.Wallet.Test.Tests;
 
 // Each call in a scope of its own, as requests of a host come in.
 [TestClass]
-public class ConcurrencyTest(TestContext testContext)
+public class ConcurrencyTest : TestBase
 {
-    private CancellationToken CancellationToken => testContext.CancellationToken;
-
     [TestMethod, EveryDatabase]
     public async Task PaymentsAtOnceNeverSpendMoreThanTheWalletHas(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
-        var other = await testWallet.CreateWallet("other", 0, cancellationToken: CancellationToken);
-        await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 10));
+        await using var testWallet = await CreateTestWallet(provider);
+        var source = await testWallet.CreateSource();
+        var wallet = await testWallet.CreateWallet("owner", 0);
+        var other = await testWallet.CreateWallet("other", 0);
+        await testWallet.Transfer(TestWallet.Request(source, wallet, 10));
 
         // Task.WhenAll awaits every call before testWallet is disposed
         // ReSharper disable once AccessToDisposedClosure
@@ -28,23 +26,22 @@ public class ConcurrencyTest(TestContext testContext)
             TestWallet.Request(wallet, other, 1))));
 
         Assert.AreEqual(10, results.Count(x => x));
-        Assert.AreEqual(0m, (await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedBalance);
-        Assert.AreEqual(10m, (await testWallet.GetWallet(other.WalletId, cancellationToken: CancellationToken)).PostedBalance);
+        Assert.AreEqual(0m, (await testWallet.GetWallet(wallet.WalletId)).PostedBalance);
+        Assert.AreEqual(10m, (await testWallet.GetWallet(other.WalletId)).PostedBalance);
         await using var scope = testWallet.CreateScope();
-        Assert.IsTrue((await scope.Reconciliation.Reconcile(CancellationToken)).IsReconciled);
-        AssertTransactionsFollowOneAnother(await testWallet.GetTransactions(wallet, CancellationToken), 11);
+        Assert.IsTrue((await scope.Reconciliation.Reconcile(TestCt)).IsReconciled);
+        AssertTransactionsFollowOneAnother(await testWallet.GetTransactions(wallet), 11);
     }
 
     // the wallets are locked in id order, whichever side each is on
     [TestMethod, EveryDatabase]
     public async Task TransfersBothWaysAtOnceNeverWaitForEachOther(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
-        var first = await testWallet.CreateWallet("first", 0, cancellationToken: CancellationToken);
-        var second = await testWallet.CreateWallet("second", 0, cancellationToken: CancellationToken);
-        await testWallet.Transfer(CancellationToken,
-            TestWallet.Request(source, first, 100),
+        await using var testWallet = await CreateTestWallet(provider);
+        var source = await testWallet.CreateSource();
+        var first = await testWallet.CreateWallet("first", 0);
+        var second = await testWallet.CreateWallet("second", 0);
+        await testWallet.Transfer(TestWallet.Request(source, first, 100),
             TestWallet.Request(source, second, 100));
 
         var requests = Enumerable.Range(0, 40)
@@ -53,28 +50,28 @@ public class ConcurrencyTest(TestContext testContext)
 
         // Task.WhenAll awaits every call before testWallet is disposed
         // ReSharper disable once AccessToDisposedClosure
-        await Task.WhenAll(requests.Select(request => testWallet.Transfer(CancellationToken, request)));
+        await Task.WhenAll(requests.Select(request => testWallet.Transfer(request)));
 
-        Assert.AreEqual(100m, (await testWallet.GetWallet(first.WalletId, cancellationToken: CancellationToken)).PostedBalance);
-        Assert.AreEqual(100m, (await testWallet.GetWallet(second.WalletId, cancellationToken: CancellationToken)).PostedBalance);
-        AssertTransactionsFollowOneAnother(await testWallet.GetTransactions(first, CancellationToken), 41);
-        AssertTransactionsFollowOneAnother(await testWallet.GetTransactions(second, CancellationToken), 41);
+        Assert.AreEqual(100m, (await testWallet.GetWallet(first.WalletId)).PostedBalance);
+        Assert.AreEqual(100m, (await testWallet.GetWallet(second.WalletId)).PostedBalance);
+        AssertTransactionsFollowOneAnother(await testWallet.GetTransactions(first), 41);
+        AssertTransactionsFollowOneAnother(await testWallet.GetTransactions(second), 41);
     }
 
     [TestMethod, EveryDatabase]
     public async Task LinkedTransfersSentTwiceAtOnceAreMadeOnce(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
+        await using var testWallet = await CreateTestWallet(provider);
+        var source = await testWallet.CreateSource();
+        var wallet = await testWallet.CreateWallet("owner", 0);
         var linked = new[] { TestWallet.Request(source, wallet, 3, externalReferenceKey: "once") };
 
         // Task.WhenAll awaits every call before testWallet is disposed
         // ReSharper disable once AccessToDisposedClosure
-        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => testWallet.Transfer(CancellationToken, linked)));
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => testWallet.Transfer(linked)));
 
         Assert.HasCount(1, results.Select(x => x[0].TransferId).Distinct());
-        Assert.AreEqual(3m, (await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedBalance);
+        Assert.AreEqual(3m, (await testWallet.GetWallet(wallet.WalletId)).PostedBalance);
     }
 
     // A post sent twice at once waits at the lock for the first, then finds its settlement: both get that one, and
@@ -82,47 +79,46 @@ public class ConcurrencyTest(TestContext testContext)
     [TestMethod, EveryDatabase]
     public async Task SettlementSentTwiceAtOnceIsMadeOnce(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
-        await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 3, isPending: true, externalReferenceKey: "held"));
+        await using var testWallet = await CreateTestWallet(provider);
+        var source = await testWallet.CreateSource();
+        var wallet = await testWallet.CreateWallet("owner", 0);
+        await testWallet.Transfer(TestWallet.Request(source, wallet, 3, isPending: true, externalReferenceKey: "held"));
 
         var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ => {
             // Task.WhenAll awaits every call before testWallet is disposed
             // ReSharper disable once AccessToDisposedClosure
             await using var scope = testWallet.CreateScope();
-            return await scope.Transfers.PostPending(TestWallet.TenantId, ["held"], CancellationToken);
+            return await scope.Transfers.PostPending(TestWallet.TenantId, ["held"], TestCt);
         }));
 
         Assert.HasCount(1, results.Select(x => x[0].TransferId).Distinct());
-        Assert.AreEqual(3m, (await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).PostedIn);
+        Assert.AreEqual(3m, (await testWallet.GetWallet(wallet.WalletId)).PostedIn);
     }
 
     // A limit raised while a payment holds the wallet waits for it, then sees what the payment left.
     [TestMethod, EveryDatabase]
     public async Task MinAvailableBalanceRaisedWhileAPaymentHoldsTheWalletWaitsForIt(WalletDatabaseProvider provider)
     {
-        await using var testWallet = await TestWallet.Create(provider, CancellationToken);
-        var source = await testWallet.CreateSource(cancellationToken: CancellationToken);
-        var wallet = await testWallet.CreateWallet("owner", 0, cancellationToken: CancellationToken);
-        await testWallet.Transfer(CancellationToken, TestWallet.Request(source, wallet, 10));
+        await using var testWallet = await CreateTestWallet(provider);
+        var source = await testWallet.CreateSource();
+        var wallet = await testWallet.CreateWallet("owner", 0);
+        await testWallet.Transfer(TestWallet.Request(source, wallet, 10));
 
         // a payment of 6 holds the wallet, as a write does, and has not committed yet
         await using var holder = testWallet.CreateDbContext();
-        await using var transaction = await holder.Database.BeginTransactionAsync(CancellationToken);
-        await TestWallet.LockWallet(holder, wallet, CancellationToken);
+        await using var transaction = await holder.Database.BeginTransactionAsync();
+        await TestWallet.LockWallet(holder, wallet);
 
         await using var scope = testWallet.CreateScope();
-        var raise = scope.Wallets.Update(TestWallet.TenantId, wallet.WalletId, TestWallet.LimitUpdate(5), CancellationToken);
-        await testWallet.WaitForBlockedCalls(1, CancellationToken);
+        var raise = scope.Wallets.Update(TestWallet.TenantId, wallet.WalletId, TestWallet.LimitUpdate(5), TestCt);
+        await testWallet.WaitForBlockedCalls(1);
         await holder.Database.ExecuteSqlRawAsync(
-            $"UPDATE gmwallet.\"Wallets\" SET \"PostedOut\" = 6 WHERE \"WalletId\" = {wallet.WalletId}",
-            CancellationToken);
+            $"UPDATE gmwallet.\"Wallets\" SET \"PostedOut\" = 6 WHERE \"WalletId\" = {wallet.WalletId}");
 
-        await transaction.CommitAsync(CancellationToken);
+        await transaction.CommitAsync();
 
         await Assert.ThrowsExactlyAsync<WalletConflictException>(() => raise);
-        Assert.AreEqual(0m, (await testWallet.GetWallet(wallet.WalletId, cancellationToken: CancellationToken)).MinAvailableBalance);
+        Assert.AreEqual(0m, (await testWallet.GetWallet(wallet.WalletId)).MinAvailableBalance);
     }
 
     // Each transaction's balance is the one before it with its amount: the lock lets one call at a time write a
@@ -141,7 +137,7 @@ public class ConcurrencyTest(TestContext testContext)
     private async Task<bool> TryTransfer(TestWallet testWallet, WalletTransferCreateRequest request)
     {
         try {
-            await testWallet.Transfer(CancellationToken, request);
+            await testWallet.Transfer(request);
             return true;
         }
         catch (InsufficientFundsException) {
